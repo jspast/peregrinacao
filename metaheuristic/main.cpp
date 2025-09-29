@@ -2,6 +2,8 @@
 #include <iostream>
 #include <string_view>
 
+using uint = unsigned int;
+
 struct temple {
     uint x;
     uint y;
