@@ -115,6 +115,8 @@ void greedy_randomized(
     uint k,
     std::default_random_engine rng)
 {
+    sol.value = 0;
+
     std::vector<struct neighbour> neighbourhood;
 
     for (uint i = 0; i < prob.num_temples; ++i) {
@@ -136,6 +138,7 @@ void greedy_randomized(
         //           << chosen << '\t' << neighbourhood.size() << '\n';
 
         uint cur_temple_idx = neighbourhood[chosen].idx;
+        sol.value += neighbourhood[chosen].distance;
         sol.route[sol_size] = cur_temple_idx;
 
         // Remove the prerequisite from other temples
@@ -164,9 +167,7 @@ void greedy_randomized(
         // Choose the next temple from the neighbourhood
         // TODO: implement alpha term
         std::uniform_int_distribution<> dist(0, std::min((uint)neighbourhood.size() -1, k -1));
-        uint chosen = dist(rng);
-
-        // TODO: keep track of solution's value
+        chosen = dist(rng);
     }
 }
 
@@ -192,7 +193,6 @@ struct solution& grasp(
 
         // TODO: local search
 
-        sol->value = compute_solution_value(prob, *sol);
         if (sol->value < best_sol->value) {
             *best_sol = *sol;
             // TODO: print elapsed time
