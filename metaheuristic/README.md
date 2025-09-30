@@ -21,6 +21,6 @@ meson compile -C build
 3. Execute o programa gerado:
 
 ```shell
-./build/grasper [file] [max_iterations] [seed]
+./build/grasper [file] [num_iterations] [seed]
 ```
 
