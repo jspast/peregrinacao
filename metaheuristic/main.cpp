@@ -193,6 +193,14 @@ void copy_problem(const struct problem& a, struct problem& b)
         b.temples[i] = a.temples[i];
 }
 
+// Copy solution a to b, which must have already been allocated
+void copy_solution(const struct solution& a, struct solution& b, uint size)
+{
+    b.value = a.value;
+    for (uint i = 0; i < size; ++i)
+        b.route[i] = a.route[i];
+}
+
 struct solution& grasp(
     const struct problem& prob,
     uint num_iterations,
@@ -200,10 +208,10 @@ struct solution& grasp(
     std::mt19937& rng)
 {
     struct solution *sol = new struct solution;
-    sol->route = new uint[prob.num_temples]{0};
+    sol->route = new uint[prob.num_temples];
 
     struct solution *best_sol = new struct solution;
-    best_sol->route = new uint[prob.num_temples]{0};
+    best_sol->route = new uint[prob.num_temples];
     best_sol->value = std::numeric_limits<uint>::max();
 
     struct problem prob_tmp;
@@ -217,7 +225,7 @@ struct solution& grasp(
         // TODO: local search
 
         if (sol->value < best_sol->value) {
-            *best_sol = *sol;
+            copy_solution(*sol, *best_sol, prob.num_temples);
             // TODO: print elapsed time
             print_solution(*sol, prob.num_temples);
         }
