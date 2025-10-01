@@ -268,7 +268,7 @@ void local_search(
 
         for (uint i = 0; i < prob.num_temples - 1 && !was_improvement; i++) {
 
-            prereq_forward[i] = true;
+            prereq_forward[sol.route[i]] = true;
 
             for (uint j = i + 1; j < prob.num_temples; j++) {
 
@@ -286,7 +286,7 @@ void local_search(
 
                 }else break;
                 
-                prereq_forward[j] = true;
+                prereq_forward[sol.route[j]] = true;
             }
 
             std::fill(prereq_forward.begin(), prereq_forward.end(), false);
