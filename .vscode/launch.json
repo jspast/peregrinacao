@@ -1,0 +1,19 @@
+{
+  "version": "0.1.0",
+  "configurations": [
+    {
+      "name": "GRASPer - Build and debug",
+      "request": "launch",
+      "type": "lldb",
+      "envFile": "${workspaceFolder}/metaheuristic/${config:mesonbuild.buildFolder}/meson-vscode.env",
+      "cwd": "${workspaceFolder}/metaheuristic/",
+      "program": "${workspaceFolder}/metaheuristic/${config:mesonbuild.buildFolder}/grasper",
+      "args": [
+        "../test_instances/01.txt",
+        "10",
+        "1"
+      ],
+      "preLaunchTask": "Meson: Build all targets",
+    }
+  ]
+}
