@@ -223,6 +223,7 @@ struct solution& grasp(
         copy_problem(prob, prob_tmp);
 
         // TODO: local search
+        local_search(*sol, prob)
 
         if (sol->value < best_sol->value) {
             copy_solution(*sol, *best_sol, prob.num_temples);
@@ -232,6 +233,65 @@ struct solution& grasp(
     }
 
     return *best_sol;
+}
+
+bool check_valid_sol(
+    const struct problem& prob,
+    uint idx1,
+    uint idx2,
+    std::vector<bool>& prereq_forward)
+{
+    bool valid_sol = true;
+
+    for (uint i = idx2; i > idx1 && valid_sol; i--) {
+        for (uint prereq : prob.temples[i].prerequisites) {
+            if (prereq_forward[prereq]) {
+                valid_sol = false;
+                break;
+            }
+        }
+    }
+
+    return valid_sol;
+}
+
+void local_search(
+    struct solution& sol,
+    const struct problem& prob)
+{
+    uint temp_value;
+    bool was_improvement = true;
+    std::vector<bool> prereq_forward(prob.num_temples, false);
+
+    while (was_improvement) {
+        was_improvement = false;
+
+        for (uint i = 0; i < prob.num_temples - 1 && !was_improvement; i++) {
+
+            prereq_forward[i] = true;
+
+            for (uint j = i + 1; j < prob.num_temples; j++) {
+
+                if(check_valid_sol(prob, i, j, prereq_forward)) {
+                    std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
+
+                    temp_value = compute_solution_value(prob, sol);
+
+                    if(temp_value < sol.value) {
+                        sol.value = temp_value;
+                        was_improvement = true;
+                        break;
+
+                    }else std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
+
+                }else break;
+                
+                prereq_forward[j] = true;
+            }
+
+            std::fill(prereq_forward.begin(), prereq_forward.end(), false);
+        }
+    }
 }
 
 int main(int argc, char *argv[])
