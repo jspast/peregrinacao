@@ -9,7 +9,7 @@ Também é necessária a instalação de um compilador e biblioteca padrão de C
 1. Inicialize o diretório do sistema de compilação (no exemplo, `build`):
 
 ```shell
-meson setup build
+meson setup build --buildtype=release
 ```
 
 2. Compile o projeto neste diretório:
