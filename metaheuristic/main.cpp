@@ -21,7 +21,7 @@ struct temple {
 
 struct problem {
     uint num_temples;
-    struct temple *temples;
+    temple *temples;
 };
 
 struct solution {
@@ -42,7 +42,7 @@ void print_help()
     std::cout << "usage: grasper [file] [num_iterations] [seed]\n";
 }
 
-const struct problem& parse_input(std::ifstream file)
+const problem& parse_input(std::ifstream file)
 {
     if (!file) {
         print_help();
@@ -50,10 +50,10 @@ const struct problem& parse_input(std::ifstream file)
         std::exit(EXIT_FAILURE);
     }
 
-    struct problem *prob = new struct problem;
+    problem *prob = new problem;
 
     file >> prob->num_temples;
-    prob->temples = new struct temple[prob->num_temples];
+    prob->temples = new temple[prob->num_temples];
     for (uint i = 0; i < prob->num_temples; ++i)
         file >> prob->temples[i].x >> prob->temples[i].y;
 
@@ -69,12 +69,12 @@ const struct problem& parse_input(std::ifstream file)
     return *prob;
 }
 
-uint temples_distance(const struct temple& a, const struct temple& b)
+uint temples_distance(const temple& a, const temple& b)
 {
     return std::sqrt((double)((b.x - a.x)*(b.x - a.x) + (b.y - a.y)*(b.y - a.y))) * 100;
 }
 
-uint compute_solution_value(const struct problem& prob, const struct solution& sol)
+uint compute_solution_value(const problem& prob, const solution& sol)
 {
     uint value = 0;
 
@@ -85,7 +85,7 @@ uint compute_solution_value(const struct problem& prob, const struct solution& s
     return value;
 }
 
-void print_solution(const struct solution& sol, const uint sol_size)
+void print_solution(const solution& sol, const uint sol_size)
 {
     std::cout << "Solution value: " << sol.value << '\n';
 
@@ -96,19 +96,19 @@ void print_solution(const struct solution& sol, const uint sol_size)
 }
 
 // Sorts candidates by the distance
-bool candidate_sorter(const struct candidate& l, const struct candidate& r)
+bool candidate_sorter(const candidate& l, const candidate& r)
 {
     return l.distance < r.distance;
 }
 
 // Builds a Restrictive Candidate List based on alpha
-std::vector<struct candidate> build_rcl(
-    const struct problem prob,
+std::vector<candidate> build_rcl(
+    const problem prob,
     const std::set<uint>& candidates,
     uint last_chosen,
     double alpha)
 {
-    std::vector<struct candidate> candidates_distances;
+    std::vector<candidate> candidates_distances;
 
     // For each candidate, compute the distance to the last temple
     for (uint c : candidates) {
@@ -124,7 +124,7 @@ std::vector<struct candidate> build_rcl(
     double max = max_it->distance;
     double threshold = min + alpha * (max - min);
 
-    std::vector<struct candidate> rcl;
+    std::vector<candidate> rcl;
     for (const auto& c : candidates_distances) {
         if (c.distance <= threshold)
             rcl.push_back(c);
@@ -135,11 +135,7 @@ std::vector<struct candidate> build_rcl(
 
 // Builds a greedy_randomized solution for the problem
 // A copy of the problem should be used as it is modified internally
-void greedy_randomized(
-    struct problem& prob,
-    struct solution& sol,
-    double alpha,
-    std::mt19937& rng)
+void greedy_randomized(problem& prob, solution& sol, double alpha, std::mt19937& rng)
 {
     sol.value = 0;
 
@@ -156,8 +152,8 @@ void greedy_randomized(
 
     // The first chosen temple is completely random
     std::uniform_int_distribution<> dist(0, first_candidates.size() - 1);
-    struct candidate chosen = {first_candidates[dist(rng)], 0};
-    struct candidate prev_chosen = chosen;
+    candidate chosen = {first_candidates[dist(rng)], 0};
+    candidate prev_chosen = chosen;
 
     for (uint sol_size = 0; sol_size < prob.num_temples - 1; sol_size++) {
 
@@ -178,7 +174,7 @@ void greedy_randomized(
         prev_chosen = chosen;
 
         // Choose the next temple with a Restrictive Candidate List
-        std::vector<struct candidate> rcl = build_rcl(prob, candidates, chosen.idx, alpha);
+        std::vector<candidate> rcl = build_rcl(prob, candidates, chosen.idx, alpha);
         std::uniform_int_distribution<> dist(0, rcl.size() - 1);
         chosen = rcl[dist(rng)];
     }
@@ -188,7 +184,7 @@ void greedy_randomized(
 }
 
 // Copy problem a to b, which must have already been allocated
-void copy_problem(const struct problem& a, struct problem& b)
+void copy_problem(const problem& a, problem& b)
 {
     b.num_temples = a.num_temples;
     for (uint i = 0; i < a.num_temples; ++i)
@@ -196,7 +192,7 @@ void copy_problem(const struct problem& a, struct problem& b)
 }
 
 bool check_valid_sol(
-    const struct problem& prob,
+    const problem& prob,
     uint idx1,
     uint idx2,
     std::vector<bool>& prereq_forward)
@@ -215,7 +211,7 @@ bool check_valid_sol(
     return valid_sol;
 }
 
-void local_search(struct solution& sol, const struct problem& prob)
+void local_search(solution& sol, const problem& prob)
 {
     uint temp_value;
     bool was_improvement = true;
@@ -257,18 +253,14 @@ void local_search(struct solution& sol, const struct problem& prob)
     }
 }
 
-struct solution grasp(
-    const struct problem& prob,
-    uint num_iterations,
-    double alpha,
-    std::mt19937& rng)
+solution grasp(const problem& prob, uint num_iterations, double alpha, std::mt19937& rng)
 {
-    struct solution sol(prob.num_temples);
-    struct solution best_sol(prob.num_temples);
+    solution sol(prob.num_temples);
+    solution best_sol(prob.num_temples);
     best_sol.value = std::numeric_limits<uint>::max();
 
-    struct problem prob_tmp;
-    prob_tmp.temples = new struct temple[prob.num_temples];
+    problem prob_tmp;
+    prob_tmp.temples = new temple[prob.num_temples];
     copy_problem(prob, prob_tmp);
 
     for (uint i = 0; i < num_iterations; ++i) {
@@ -308,7 +300,7 @@ int main(int argc, char *argv[])
 
     double alpha = argc > 4 ? std::atof(argv[4]) : DEFAULT_ALPHA;
 
-    const struct problem prob = parse_input(std::ifstream(input_path.data()));
+    const problem prob = parse_input(std::ifstream(input_path.data()));
 
     grasp(prob, num_iterations, alpha, rng);
 
