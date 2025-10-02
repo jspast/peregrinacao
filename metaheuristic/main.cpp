@@ -26,7 +26,9 @@ struct problem {
 
 struct solution {
     uint value;
-    uint *route;
+    std::vector<uint> route;
+
+    solution(uint size) : route(size) {}
 };
 
 struct candidate {
@@ -193,48 +195,6 @@ void copy_problem(const struct problem& a, struct problem& b)
         b.temples[i] = a.temples[i];
 }
 
-// Copy solution a to b, which must have already been allocated
-void copy_solution(const struct solution& a, struct solution& b, uint size)
-{
-    b.value = a.value;
-    for (uint i = 0; i < size; ++i)
-        b.route[i] = a.route[i];
-}
-
-struct solution& grasp(
-    const struct problem& prob,
-    uint num_iterations,
-    double alpha,
-    std::mt19937& rng)
-{
-    struct solution *sol = new struct solution;
-    sol->route = new uint[prob.num_temples];
-
-    struct solution *best_sol = new struct solution;
-    best_sol->route = new uint[prob.num_temples];
-    best_sol->value = std::numeric_limits<uint>::max();
-
-    struct problem prob_tmp;
-    prob_tmp.temples = new struct temple[prob.num_temples];
-    copy_problem(prob, prob_tmp);
-
-    for (uint i = 0; i < num_iterations; ++i) {
-        greedy_randomized(prob_tmp, *sol, alpha, rng);
-        copy_problem(prob, prob_tmp);
-
-        // TODO: local search
-        local_search(*sol, prob)
-
-        if (sol->value < best_sol->value) {
-            copy_solution(*sol, *best_sol, prob.num_temples);
-            // TODO: print elapsed time
-            print_solution(*sol, prob.num_temples);
-        }
-    }
-
-    return *best_sol;
-}
-
 bool check_valid_sol(
     const struct problem& prob,
     uint idx1,
@@ -255,9 +215,7 @@ bool check_valid_sol(
     return valid_sol;
 }
 
-void local_search(
-    struct solution& sol,
-    const struct problem& prob)
+void local_search(struct solution& sol, const struct problem& prob)
 {
     uint temp_value;
     bool was_improvement = true;
@@ -281,17 +239,52 @@ void local_search(
                         sol.value = temp_value;
                         was_improvement = true;
                         break;
+                    }
+                    else {
+                        std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
+                    }
 
-                    }else std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
+                }
+                else {
+                    break;
+                }
 
-                }else break;
-                
                 prereq_forward[sol.route[j]] = true;
             }
 
             std::fill(prereq_forward.begin(), prereq_forward.end(), false);
         }
     }
+}
+
+struct solution grasp(
+    const struct problem& prob,
+    uint num_iterations,
+    double alpha,
+    std::mt19937& rng)
+{
+    struct solution sol(prob.num_temples);
+    struct solution best_sol(prob.num_temples);
+    best_sol.value = std::numeric_limits<uint>::max();
+
+    struct problem prob_tmp;
+    prob_tmp.temples = new struct temple[prob.num_temples];
+    copy_problem(prob, prob_tmp);
+
+    for (uint i = 0; i < num_iterations; ++i) {
+        greedy_randomized(prob_tmp, sol, alpha, rng);
+        copy_problem(prob, prob_tmp);
+
+        local_search(sol, prob);
+
+        if (sol.value < best_sol.value) {
+            best_sol = sol;
+            // TODO: print elapsed time
+            print_solution(sol, prob.num_temples);
+        }
+    }
+
+    return best_sol;
 }
 
 int main(int argc, char *argv[])
