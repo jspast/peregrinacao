@@ -211,9 +211,33 @@ bool check_valid_sol(
     return valid_sol;
 }
 
+uint compute_new_sol_value(
+    const problem& prob, 
+    const solution& sol, 
+    uint idx1,
+    uint idx2,
+    uint first_dist)
+{
+    uint new_value = sol.value - first_dist;
+
+    new_value -= (idx2 + 1 < prob.num_temples) 
+    ? temples_distance(prob.temples[sol.route[idx2]], prob.temples[sol.route[idx2 + 1]]) 
+    : 0;
+
+    new_value += (idx1 > 0)
+    ? temples_distance(prob.temples[sol.route[idx1 - 1]], prob.temples[sol.route[idx2]])
+    : 0;
+
+    new_value += (idx2 + 1 < prob.num_temples)
+    ? temples_distance(prob.temples[sol.route[idx1]], prob.temples[sol.route[idx2 + 1]])
+    : 0;
+
+    return new_value;
+}
+
 void local_search(solution& sol, const problem& prob)
 {
-    uint temp_value;
+    uint temp_value, first_dist;
     bool was_improvement = true;
     std::vector<bool> prereq_forward(prob.num_temples, false);
 
@@ -224,22 +248,20 @@ void local_search(solution& sol, const problem& prob)
 
             prereq_forward[sol.route[i]] = true;
 
+            first_dist = (i > 0) ? temples_distance(prob.temples[sol.route[i - 1]], prob.temples[sol.route[i]]) : 0;
+
             for (uint j = i + 1; j < prob.num_temples; j++) {
 
                 if(check_valid_sol(prob, i, j, prereq_forward)) {
-                    std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
 
-                    temp_value = compute_solution_value(prob, sol);
+                    temp_value = compute_new_sol_value(prob, sol, i, j, first_dist);
 
                     if(temp_value < sol.value) {
+                        std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
                         sol.value = temp_value;
                         was_improvement = true;
                         break;
                     }
-                    else {
-                        std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
-                    }
-
                 }
                 else {
                     break;
