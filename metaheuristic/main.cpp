@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <numeric>
 #include <random>
 #include <string_view>
 #include <vector>
@@ -187,8 +188,7 @@ void greedy_randomized(problem& prob, solution& sol, double alpha, std::mt19937&
 void copy_problem(const problem& a, problem& b)
 {
     b.num_temples = a.num_temples;
-    for (uint i = 0; i < a.num_temples; ++i)
-        b.temples[i] = a.temples[i];
+    std::copy(a.temples, &a.temples[a.num_temples], b.temples);
 }
 
 bool check_valid_sol(
@@ -196,7 +196,7 @@ bool check_valid_sol(
     const solution& sol,
     uint idx1,
     uint idx2,
-    std::vector<bool>& prereq_forward)
+    bool *prereq_forward)
 {
     bool valid_sol = true;
 
@@ -236,16 +236,18 @@ uint compute_new_sol_value(
     return new_value;
 }
 
-void local_search(solution& sol, const problem& prob)
+void local_search(solution& sol, const problem& prob, bool *prereq_forward, uint *search_order, std::mt19937& rng)
 {
     uint temp_value, first_dist;
     bool was_improvement = true;
-    std::vector<bool> prereq_forward(prob.num_temples, false);
 
     while (was_improvement) {
         was_improvement = false;
 
-        for (uint i = 0; i < prob.num_temples - 1 && !was_improvement; i++) {
+        std::shuffle(search_order, &search_order[prob.num_temples - 1], rng);
+
+        for (uint k = 0; k < prob.num_temples - 1 && !was_improvement; k++) {
+            uint i = search_order[k];
 
             prereq_forward[sol.route[i]] = true;
 
@@ -253,25 +255,22 @@ void local_search(solution& sol, const problem& prob)
 
             for (uint j = i + 1; j < prob.num_temples; j++) {
 
-                if (check_valid_sol(prob, sol, i, j, prereq_forward)) {
+                if (!check_valid_sol(prob, sol, i, j, prereq_forward))
+                    break;
 
-                    temp_value = compute_new_sol_value(prob, sol, i, j, first_dist);
+                temp_value = compute_new_sol_value(prob, sol, i, j, first_dist);
 
-                    if (temp_value < sol.value) {
-                        std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
-                        sol.value = temp_value;
-                        was_improvement = true;
-                        break;
-                    }
-                }
-                else {
+                if (temp_value < sol.value) {
+                    std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
+                    sol.value = temp_value;
+                    was_improvement = true;
                     break;
                 }
 
                 prereq_forward[sol.route[j]] = true;
             }
 
-            std::fill(prereq_forward.begin(), prereq_forward.end(), false);
+            std::fill(prereq_forward, &prereq_forward[prob.num_temples], false);
         }
     }
 }
@@ -286,11 +285,15 @@ solution grasp(const problem& prob, uint num_iterations, double alpha, std::mt19
     prob_tmp.temples = new temple[prob.num_temples];
     copy_problem(prob, prob_tmp);
 
+    bool *prereq_forward = new bool[prob.num_temples];
+    uint *search_order = new uint[prob.num_temples - 1];
+    std::iota(search_order, &search_order[prob.num_temples - 1], 0);
+
     for (uint i = 0; i < num_iterations; ++i) {
         greedy_randomized(prob_tmp, sol, alpha, rng);
         copy_problem(prob, prob_tmp);
 
-        local_search(sol, prob);
+        local_search(sol, prob, prereq_forward, search_order, rng);
 
         if (sol.value < best_sol.value) {
             best_sol = sol;
