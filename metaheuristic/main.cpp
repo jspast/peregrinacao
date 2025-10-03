@@ -193,6 +193,7 @@ void copy_problem(const problem& a, problem& b)
 
 bool check_valid_sol(
     const problem& prob,
+    const solution& sol,
     uint idx1,
     uint idx2,
     std::vector<bool>& prereq_forward)
@@ -200,7 +201,7 @@ bool check_valid_sol(
     bool valid_sol = true;
 
     for (uint i = idx2; i > idx1 && valid_sol; i--) {
-        for (uint prereq : prob.temples[i].prerequisites) {
+        for (uint prereq : prob.temples[sol.route[i]].prerequisites) {
             if (prereq_forward[prereq]) {
                 valid_sol = false;
                 break;
@@ -252,11 +253,11 @@ void local_search(solution& sol, const problem& prob)
 
             for (uint j = i + 1; j < prob.num_temples; j++) {
 
-                if(check_valid_sol(prob, i, j, prereq_forward)) {
+                if (check_valid_sol(prob, sol, i, j, prereq_forward)) {
 
                     temp_value = compute_new_sol_value(prob, sol, i, j, first_dist);
 
-                    if(temp_value < sol.value) {
+                    if (temp_value < sol.value) {
                         std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
                         sol.value = temp_value;
                         was_improvement = true;
