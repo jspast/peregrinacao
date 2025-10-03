@@ -16,7 +16,7 @@ using uint = unsigned int;
 using default_clock = std::chrono::steady_clock;
 using second_duration = std::chrono::duration<double, std::ratio<1> >;
 
-#define DEFAULT_ALPHA 0.1
+#define DEFAULT_ALPHA 0.2
 
 struct temple {
     uint x;
@@ -80,12 +80,16 @@ uint temples_distance(const temple& a, const temple& b)
     return std::sqrt((double)((b.x - a.x)*(b.x - a.x) + (b.y - a.y)*(b.y - a.y))) * 100;
 }
 
+double get_elapsed_time(std::chrono::time_point<default_clock>& timer)
+{
+    return std::chrono::duration_cast<second_duration>
+        (default_clock::now() - timer).count();
+}
+
 void print_time(std::chrono::time_point<default_clock>& timer)
 {
-    double elapsed_time = std::chrono::duration_cast<second_duration>
-        (default_clock::now() - timer).count();
     std::cout << std::fixed << std::setprecision(2)
-              << "Elapsed time: " << elapsed_time << " seconds\n";
+              << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
 }
 
 void print_solution(const solution& sol)
@@ -286,6 +290,7 @@ solution grasp(
     const problem& prob,
     uint num_iterations,
     double alpha,
+    double time_control,
     std::mt19937& rng,
     std::chrono::time_point<default_clock>& timer)
 {
@@ -301,6 +306,13 @@ solution grasp(
     std::iota(search_order, &search_order[prob.num_temples - 1], 0);
 
     for (uint i = 0; i < num_iterations; ++i) {
+        if (time_control && get_elapsed_time(timer) > time_control) {
+            time_control = 0;
+            std::cout << '\n';
+            std::cout << "Iteration " << i << " started" << '\n';
+            print_time(timer);
+        }
+
         copy_problem(prob, prob_tmp);
         greedy_randomized(prob_tmp, sol, alpha, rng);
         local_search(sol, prob, prereq_forward, search_order, rng);
@@ -337,11 +349,13 @@ int main(int argc, char *argv[])
 
     double alpha = (argc > 4) ? std::atof(argv[4]) : DEFAULT_ALPHA;
 
+    double time_control = (argc > 5) ? std::atof(argv[5]) : 0;
+
     std::chrono::time_point<default_clock> timer{default_clock::now()};
 
     const problem prob = parse_input(std::ifstream(input_path.data()));
 
-    grasp(prob, num_iterations, alpha, rng, timer);
+    grasp(prob, num_iterations, alpha, time_control, rng, timer);
 
     return 0;
 }
