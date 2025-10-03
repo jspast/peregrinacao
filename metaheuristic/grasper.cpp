@@ -16,7 +16,7 @@ using uint = unsigned int;
 using default_clock = std::chrono::steady_clock;
 using second_duration = std::chrono::duration<double, std::ratio<1> >;
 
-#define DEFAULT_ALPHA 0.2
+#define DEFAULT_ALPHA 0.05
 
 struct temple {
     uint x;
@@ -45,7 +45,7 @@ struct candidate {
 void print_help()
 {
     std::cout << "GRASPer peregrinação solver using GRASP\n";
-    std::cout << "usage: grasper [file] [num_iterations] [seed]\n";
+    std::cout << "usage: grasper <file> <num_iterations> <seed> [alpha] [time_control]\n";
 }
 
 const problem& parse_input(std::ifstream file)
