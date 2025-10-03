@@ -84,7 +84,8 @@ void print_time(std::chrono::time_point<default_clock>& timer)
 {
     double elapsed_time = std::chrono::duration_cast<second_duration>
         (default_clock::now() - timer).count();
-    std::cout << std::setprecision(2) << "Elapsed time: " << elapsed_time << " seconds\n";
+    std::cout << std::fixed << std::setprecision(2)
+              << "Elapsed time: " << elapsed_time << " seconds\n";
 }
 
 void print_solution(const solution& sol)
@@ -306,6 +307,7 @@ solution grasp(
 
         if (sol.value < best_sol.value) {
             best_sol = sol;
+            std::cout << '\n';
             print_time(timer);
             print_solution(sol);
         }
@@ -333,7 +335,7 @@ int main(int argc, char *argv[])
     seed = std::atoi(argv[3]);
     std::mt19937 rng(seed);
 
-    double alpha = argc > 4 ? std::atof(argv[4]) : DEFAULT_ALPHA;
+    double alpha = (argc > 4) ? std::atof(argv[4]) : DEFAULT_ALPHA;
 
     std::chrono::time_point<default_clock> timer{default_clock::now()};
 
