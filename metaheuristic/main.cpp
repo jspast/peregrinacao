@@ -6,6 +6,7 @@
 #include <numeric>
 #include <random>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 #include <set>
 
@@ -16,8 +17,8 @@ using uint = unsigned int;
 struct temple {
     uint x;
     uint y;
-    std::set<uint> prerequisites;
-    std::set<uint> dependents;
+    std::unordered_set<uint> prerequisites;
+    std::unordered_set<uint> dependents;
 };
 
 struct problem {
@@ -75,17 +76,6 @@ uint temples_distance(const temple& a, const temple& b)
     return std::sqrt((double)((b.x - a.x)*(b.x - a.x) + (b.y - a.y)*(b.y - a.y))) * 100;
 }
 
-uint compute_solution_value(const problem& prob, const solution& sol)
-{
-    uint value = 0;
-
-    for (uint i = 0; i + 1 < prob.num_temples; ++i) {
-        value += temples_distance(prob.temples[sol.route[i]], prob.temples[sol.route[i + 1]]);
-    }
-
-    return value;
-}
-
 void print_solution(const solution& sol)
 {
     std::cout << "Solution value: " << sol.value << '\n';
@@ -110,19 +100,18 @@ std::vector<candidate> build_rcl(
     double alpha)
 {
     std::vector<candidate> candidates_distances;
+    uint min = std::numeric_limits<uint>::max();
+    uint max = std::numeric_limits<uint>::min();
 
     // For each candidate, compute the distance to the last temple
     for (uint c : candidates) {
-        candidates_distances.push_back({c,
-            temples_distance(prob.temples[last_chosen], prob.temples[c])
-        });
+        uint distance = temples_distance(prob.temples[last_chosen], prob.temples[c]);
+        candidates_distances.push_back({c, distance});
+
+        min = std::min(min, distance);
+        max = std::max(max, distance);
     }
 
-    auto [min_it, max_it] = std::minmax_element(
-        candidates_distances.begin(), candidates_distances.end(), &candidate_sorter);
-
-    double min = min_it->distance;
-    double max = max_it->distance;
     double threshold = min + alpha * (max - min);
 
     std::vector<candidate> rcl;
@@ -212,38 +201,46 @@ bool check_valid_sol(
     return valid_sol;
 }
 
+// Efficiently computes the solution value from a 2-opt operation
 uint compute_new_sol_value(
     const problem& prob,
     const solution& sol,
     uint idx1,
-    uint idx2,
-    uint first_dist)
+    uint idx2)
 {
-    uint new_value = sol.value - first_dist;
+    uint new_value = sol.value;
 
-    new_value -= (idx2 + 1 < prob.num_temples)
-    ? temples_distance(prob.temples[sol.route[idx2]], prob.temples[sol.route[idx2 + 1]])
-    : 0;
+    if (idx2 + 1 < prob.num_temples) {
+        new_value -= temples_distance(prob.temples[sol.route[idx2]],
+                                      prob.temples[sol.route[idx2 + 1]]);
+        new_value += temples_distance(prob.temples[sol.route[idx1]],
+                                      prob.temples[sol.route[idx2 + 1]]);
+    }
 
-    new_value += (idx1 > 0)
-    ? temples_distance(prob.temples[sol.route[idx1 - 1]], prob.temples[sol.route[idx2]])
-    : 0;
-
-    new_value += (idx2 + 1 < prob.num_temples)
-    ? temples_distance(prob.temples[sol.route[idx1]], prob.temples[sol.route[idx2 + 1]])
-    : 0;
+    if (idx1 > 0) {
+        new_value -= temples_distance(prob.temples[sol.route[idx1 - 1]],
+                                      prob.temples[sol.route[idx1]]);
+        new_value += temples_distance(prob.temples[sol.route[idx1 - 1]],
+                                      prob.temples[sol.route[idx2]]);
+    }
 
     return new_value;
 }
 
-void local_search(solution& sol, const problem& prob, bool *prereq_forward, uint *search_order, std::mt19937& rng)
+void local_search(
+    solution& sol,
+    const problem& prob,
+    bool *prereq_forward,
+    uint *search_order,
+    std::mt19937& rng)
 {
-    uint temp_value, first_dist;
+    uint cur_value;
     bool was_improvement = true;
 
     while (was_improvement) {
         was_improvement = false;
 
+        // Explore the neighbourhood in a different order each time
         std::shuffle(search_order, &search_order[prob.num_temples - 1], rng);
 
         for (uint k = 0; k < prob.num_temples - 1 && !was_improvement; k++) {
@@ -251,18 +248,16 @@ void local_search(solution& sol, const problem& prob, bool *prereq_forward, uint
 
             prereq_forward[sol.route[i]] = true;
 
-            first_dist = (i > 0) ? temples_distance(prob.temples[sol.route[i - 1]], prob.temples[sol.route[i]]) : 0;
-
             for (uint j = i + 1; j < prob.num_temples; j++) {
 
                 if (!check_valid_sol(prob, sol, i, j, prereq_forward))
                     break;
 
-                temp_value = compute_new_sol_value(prob, sol, i, j, first_dist);
+                cur_value = compute_new_sol_value(prob, sol, i, j);
 
-                if (temp_value < sol.value) {
+                if (cur_value < sol.value) {
                     std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
-                    sol.value = temp_value;
+                    sol.value = cur_value;
                     was_improvement = true;
                     break;
                 }
@@ -283,16 +278,14 @@ solution grasp(const problem& prob, uint num_iterations, double alpha, std::mt19
 
     problem prob_tmp;
     prob_tmp.temples = new temple[prob.num_temples];
-    copy_problem(prob, prob_tmp);
 
     bool *prereq_forward = new bool[prob.num_temples];
     uint *search_order = new uint[prob.num_temples - 1];
     std::iota(search_order, &search_order[prob.num_temples - 1], 0);
 
     for (uint i = 0; i < num_iterations; ++i) {
-        greedy_randomized(prob_tmp, sol, alpha, rng);
         copy_problem(prob, prob_tmp);
-
+        greedy_randomized(prob_tmp, sol, alpha, rng);
         local_search(sol, prob, prereq_forward, search_order, rng);
 
         if (sol.value < best_sol.value) {
