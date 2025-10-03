@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <numeric>
@@ -11,6 +13,8 @@
 #include <set>
 
 using uint = unsigned int;
+using default_clock = std::chrono::steady_clock;
+using second_duration = std::chrono::duration<double, std::ratio<1> >;
 
 #define DEFAULT_ALPHA 0.1
 
@@ -74,6 +78,13 @@ const problem& parse_input(std::ifstream file)
 uint temples_distance(const temple& a, const temple& b)
 {
     return std::sqrt((double)((b.x - a.x)*(b.x - a.x) + (b.y - a.y)*(b.y - a.y))) * 100;
+}
+
+void print_time(std::chrono::time_point<default_clock>& timer)
+{
+    double elapsed_time = std::chrono::duration_cast<second_duration>
+        (default_clock::now() - timer).count();
+    std::cout << std::setprecision(2) << "Elapsed time: " << elapsed_time << " seconds\n";
 }
 
 void print_solution(const solution& sol)
@@ -270,7 +281,12 @@ void local_search(
     }
 }
 
-solution grasp(const problem& prob, uint num_iterations, double alpha, std::mt19937& rng)
+solution grasp(
+    const problem& prob,
+    uint num_iterations,
+    double alpha,
+    std::mt19937& rng,
+    std::chrono::time_point<default_clock>& timer)
 {
     solution sol(prob.num_temples);
     solution best_sol(prob.num_temples);
@@ -290,7 +306,7 @@ solution grasp(const problem& prob, uint num_iterations, double alpha, std::mt19
 
         if (sol.value < best_sol.value) {
             best_sol = sol;
-            // TODO: print elapsed time
+            print_time(timer);
             print_solution(sol);
         }
     }
@@ -319,9 +335,11 @@ int main(int argc, char *argv[])
 
     double alpha = argc > 4 ? std::atof(argv[4]) : DEFAULT_ALPHA;
 
+    std::chrono::time_point<default_clock> timer{default_clock::now()};
+
     const problem prob = parse_input(std::ifstream(input_path.data()));
 
-    grasp(prob, num_iterations, alpha, rng);
+    grasp(prob, num_iterations, alpha, rng, timer);
 
     return 0;
 }
