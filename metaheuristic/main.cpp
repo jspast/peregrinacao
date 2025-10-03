@@ -57,9 +57,9 @@ const problem& parse_input(std::ifstream file)
     for (uint i = 0; i < prob->num_temples; ++i)
         file >> prob->temples[i].x >> prob->temples[i].y;
 
-    uint dependencies, prerequisites, dependents;
-    file >> dependencies;
-    for (uint i = 0; i < dependencies; ++i) {
+    uint num_dependencies, prerequisites, dependents;
+    file >> num_dependencies;
+    for (uint i = 0; i < num_dependencies; ++i) {
         file >> prerequisites >> dependents;
         prerequisites--; dependents--;
         prob->temples[prerequisites].dependents.insert(dependents);
@@ -85,14 +85,14 @@ uint compute_solution_value(const problem& prob, const solution& sol)
     return value;
 }
 
-void print_solution(const solution& sol, const uint sol_size)
+void print_solution(const solution& sol)
 {
     std::cout << "Solution value: " << sol.value << '\n';
 
     std::cout << "Solution route: ";
-    for (uint i = 0; i < sol_size - 1; ++i)
+    for (uint i = 0; i < sol.route.size() - 1; ++i)
         std::cout << sol.route[i] + 1 << " -> ";
-    std::cout << sol.route[sol_size - 1] + 1 << '\n';
+    std::cout << sol.route[sol.route.size() - 1] + 1 << '\n';
 }
 
 // Sorts candidates by the distance
@@ -212,16 +212,16 @@ bool check_valid_sol(
 }
 
 uint compute_new_sol_value(
-    const problem& prob, 
-    const solution& sol, 
+    const problem& prob,
+    const solution& sol,
     uint idx1,
     uint idx2,
     uint first_dist)
 {
     uint new_value = sol.value - first_dist;
 
-    new_value -= (idx2 + 1 < prob.num_temples) 
-    ? temples_distance(prob.temples[sol.route[idx2]], prob.temples[sol.route[idx2 + 1]]) 
+    new_value -= (idx2 + 1 < prob.num_temples)
+    ? temples_distance(prob.temples[sol.route[idx2]], prob.temples[sol.route[idx2 + 1]])
     : 0;
 
     new_value += (idx1 > 0)
@@ -294,7 +294,7 @@ solution grasp(const problem& prob, uint num_iterations, double alpha, std::mt19
         if (sol.value < best_sol.value) {
             best_sol = sol;
             // TODO: print elapsed time
-            print_solution(sol, prob.num_temples);
+            print_solution(sol);
         }
     }
 
