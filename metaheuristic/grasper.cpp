@@ -14,7 +14,7 @@
 
 using uint = unsigned int;
 using default_clock = std::chrono::steady_clock;
-using second_duration = std::chrono::duration<double, std::ratio<1> >;
+using second_duration = std::chrono::duration<double, std::ratio<1>>;
 
 #define DEFAULT_ALPHA 0.05
 
@@ -102,15 +102,9 @@ void print_solution(const solution& sol)
     std::cout << sol.route[sol.route.size() - 1] + 1 << '\n';
 }
 
-// Sorts candidates by the distance
-bool candidate_sorter(const candidate& l, const candidate& r)
-{
-    return l.distance < r.distance;
-}
-
 // Builds a Restrictive Candidate List based on alpha
 std::vector<candidate> build_rcl(
-    const problem prob,
+    const problem& prob,
     const std::set<uint>& candidates,
     uint last_chosen,
     double alpha)
@@ -139,7 +133,7 @@ std::vector<candidate> build_rcl(
     return rcl;
 }
 
-// Builds a greedy_randomized solution for the problem
+// Builds a greedy randomized solution for the problem
 // A copy of the problem should be used as it is modified internally
 void greedy_randomized(problem& prob, solution& sol, double alpha, std::mt19937& rng)
 {
