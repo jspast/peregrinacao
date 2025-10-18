@@ -102,35 +102,40 @@ void print_solution(const solution& sol)
     std::cout << sol.route[sol.route.size() - 1] + 1 << '\n';
 }
 
-// Builds a Restrictive Candidate List based on alpha
-std::vector<candidate> build_rcl(
+// Sort function for candidates by the distance
+bool candidate_sorter(const candidate& l, const candidate& r)
+{
+    return l.distance < r.distance;
+}
+
+// Chooses the next candidate based on the distance to the last chosen temple
+// Builds a Restrictive Candidate List with the alpha% best candidates
+// The returned candidate is randomly selected from the RCL
+candidate choose_candidate(
     const problem& prob,
     const std::set<uint>& candidates,
     uint last_chosen,
-    double alpha)
+    double alpha,
+    std::mt19937& rng)
 {
     std::vector<candidate> candidates_distances;
-    uint min = std::numeric_limits<uint>::max();
-    uint max = std::numeric_limits<uint>::min();
 
-    // For each candidate, compute the distance to the last temple
+    // For each candidate, compute the distance to the last chosen temple
     for (uint c : candidates) {
         uint distance = temples_distance(prob.temples[last_chosen], prob.temples[c]);
         candidates_distances.push_back({c, distance});
-
-        min = std::min(min, distance);
-        max = std::max(max, distance);
     }
 
-    double threshold = min + alpha * (max - min);
+    std::sort(candidates_distances.begin(), candidates_distances.end(), &candidate_sorter);
 
-    std::vector<candidate> rcl;
-    for (const auto& c : candidates_distances) {
-        if (c.distance <= threshold)
-            rcl.push_back(c);
-    }
+    // k is the size of the RCL, computed with the alpha term
+    uint k = std::max((int) (candidates.size() * alpha), 1);
 
-    return rcl;
+    // Randomly select candidate from the RCL
+    std::uniform_int_distribution<> dist(0, k - 1);
+    candidate chosen = candidates_distances[dist(rng)];
+
+    return chosen;
 }
 
 // Builds a greedy randomized solution for the problem
@@ -173,10 +178,8 @@ void greedy_randomized(problem& prob, solution& sol, double alpha, std::mt19937&
         candidates.erase(chosen.idx);
         prev_chosen = chosen;
 
-        // Choose the next temple with a Restrictive Candidate List
-        std::vector<candidate> rcl = build_rcl(prob, candidates, chosen.idx, alpha);
-        std::uniform_int_distribution<> dist(0, rcl.size() - 1);
-        chosen = rcl[dist(rng)];
+        // Choose the next temple from candidates
+        chosen = choose_candidate(prob, candidates, chosen.idx, alpha, rng);
     }
 
     sol.value += chosen.distance;
