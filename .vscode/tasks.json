@@ -1,0 +1,24 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "GRASPer - Build Debug",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-std=c++17",
+                "-Og",
+                "-march=native",
+                "-g",
+                "metaheuristic/grasper.cpp",
+                "-o",
+                "metaheuristic/grasper"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "Compile GRASPer Debug with g++"
+        }
+    ]
+}
