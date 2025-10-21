@@ -38,9 +38,7 @@ struct problem {
 
 struct solution {
     uint value;
-    std::vector<uint> route;
-
-    solution(uint size) : route(size) {}
+    uint *route;
 };
 
 struct candidate {
@@ -133,14 +131,14 @@ void print_time(std::chrono::time_point<default_clock>& timer)
               << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
 }
 
-void print_solution(const solution& sol)
+void print_solution(const solution& sol, uint route_size)
 {
     std::cout << "Solution value: " << sol.value << '\n';
 
     std::cout << "Solution route: ";
-    for (uint i = 0; i < sol.route.size() - 1; ++i)
+    for (uint i = 0; i < route_size - 1; ++i)
         std::cout << sol.route[i] + 1 << " -> ";
-    std::cout << sol.route[sol.route.size() - 1] + 1 << '\n';
+    std::cout << sol.route[route_size - 1] + 1 << '\n';
 }
 
 // Sort function for candidates by the distance
@@ -201,10 +199,10 @@ void greedy_randomized(problem& prob, solution& sol, double alpha, std::mt19937&
     candidate chosen = {first_candidates[dist(rng)], 0};
     candidate prev_chosen = chosen;
 
-    for (uint sol_size = 0; sol_size < prob.num_temples - 1; sol_size++) {
+    for (uint route_size = 0; route_size < prob.num_temples - 1; route_size++) {
 
         sol.value += chosen.distance;
-        sol.route[sol_size] = chosen.idx;
+        sol.route[route_size] = chosen.idx;
 
         // Remove the prerequisite from other temples
         for (auto i : prob.temples[chosen.idx].dependents) {
@@ -310,7 +308,7 @@ void local_search(
                 cur_value = compute_new_sol_value(prob, sol, i, j);
 
                 if (cur_value < sol.value) {
-                    std::reverse(sol.route.begin() + i, sol.route.begin() + j + 1);
+                    std::reverse(&sol.route[i], &sol.route[j + 1]);
                     sol.value = cur_value;
                     was_improvement = true;
                     break;
@@ -324,6 +322,13 @@ void local_search(
     }
 }
 
+// Copy solution a to b, which must have already been allocated
+void copy_solution(const struct solution& a, struct solution& b, uint route_size)
+{
+    b.value = a.value;
+    std::copy(a.route, &a.route[route_size], b.route);
+}
+
 solution grasp(
     const problem& prob,
     uint num_iterations,
@@ -332,8 +337,11 @@ solution grasp(
     std::mt19937& rng,
     std::chrono::time_point<default_clock>& timer)
 {
-    solution sol(prob.num_temples);
-    solution best_sol(prob.num_temples);
+    solution sol;
+    sol.route = new uint[prob.num_temples];
+
+    solution best_sol;
+    best_sol.route = new uint[prob.num_temples];
     best_sol.value = std::numeric_limits<uint>::max();
 
     problem prob_tmp;
@@ -356,10 +364,10 @@ solution grasp(
         local_search(sol, prob, prereq_forward, search_order, rng);
 
         if (sol.value < best_sol.value) {
-            best_sol = sol;
+            copy_solution(sol, best_sol, prob.num_temples);
             std::cout << '\n';
             print_time(timer);
-            print_solution(sol);
+            print_solution(sol, prob.num_temples);
         }
     }
 
