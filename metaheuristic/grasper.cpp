@@ -9,8 +9,6 @@
 #include <random>
 #include <string_view>
 #include <unordered_set>
-#include <vector>
-#include <set>
 
 using uint = unsigned int;
 using default_clock = std::chrono::steady_clock;
@@ -150,79 +148,73 @@ bool candidate_sorter(const candidate& l, const candidate& r)
 // Chooses the next candidate based on the distance to the last chosen temple
 // Builds a Restrictive Candidate List with the alpha% best candidates
 // The returned candidate is randomly selected from the RCL
-candidate choose_candidate(
+uint choose_candidate(
     const problem& prob,
-    const std::set<uint>& candidates,
-    uint last_chosen,
+    candidate *candidates,
+    uint num_candidates,
+    uint last_chosen_idx,
     double alpha,
     std::mt19937& rng)
 {
-    std::vector<candidate> candidates_distances;
-
     // For each candidate, compute the distance to the last chosen temple
-    for (uint c : candidates) {
-        uint distance = temples_distance(prob.temples[last_chosen], prob.temples[c]);
-        candidates_distances.push_back({c, distance});
+    for (uint i = 0; i < num_candidates; ++i) {
+        candidates[i].distance = temples_distance(prob.temples[last_chosen_idx],
+                                                  prob.temples[candidates[i].idx]);
     }
 
-    std::sort(candidates_distances.begin(), candidates_distances.end(), &candidate_sorter);
+    std::sort(candidates, &candidates[num_candidates], &candidate_sorter);
 
     // k is the size of the RCL, computed with the alpha term
-    uint k = std::max((int) (candidates.size() * alpha), 1);
+    uint k = std::max(1, (int) std::ceil(num_candidates * alpha));
 
     // Randomly select candidate from the RCL
     std::uniform_int_distribution<> dist(0, k - 1);
-    candidate chosen = candidates_distances[dist(rng)];
 
-    return chosen;
+    return dist(rng);
 }
 
 // Builds a greedy randomized solution for the problem
 // A copy of the problem should be used as it is modified internally
-void greedy_randomized(problem& prob, solution& sol, double alpha, std::mt19937& rng)
+void greedy_randomized(problem& prob, solution& sol, candidate* candidates, double alpha, std::mt19937& rng)
 {
     sol.value = 0;
 
-    // Use vector for the first choice as it is better for selecting a random element
-    std::vector<uint> first_candidates;
-    std::set<uint> candidates;
+    uint num_candidates = 0;
 
     for (uint i = 0; i < prob.num_temples; ++i) {
-        if (prob.temples[i].prerequisites.empty()) {
-            candidates.insert(i);
-            first_candidates.push_back(i);
-        }
+        if (prob.temples[i].prerequisites.empty())
+            candidates[num_candidates++] = {i, 0};
     }
 
     // The first chosen temple is completely random
-    std::uniform_int_distribution<> dist(0, first_candidates.size() - 1);
-    candidate chosen = {first_candidates[dist(rng)], 0};
-    candidate prev_chosen = chosen;
+    std::uniform_int_distribution<> dist(0, num_candidates - 1);
+    uint chosen_candidate_idx = dist(rng);
+    candidate chosen_candidate = candidates[chosen_candidate_idx];
 
     for (uint route_size = 0; route_size < prob.num_temples - 1; route_size++) {
 
-        sol.value += chosen.distance;
-        sol.route[route_size] = chosen.idx;
+        sol.value += chosen_candidate.distance;
+        sol.route[route_size] = chosen_candidate.idx;
 
         // Remove the prerequisite from other temples
-        for (auto i : prob.temples[chosen.idx].dependents) {
-            prob.temples[i].prerequisites.erase(chosen.idx);
+        for (auto i : prob.temples[chosen_candidate.idx].dependents) {
+            prob.temples[i].prerequisites.erase(chosen_candidate.idx);
 
             // Add temple to the candidates if there is no prerequisite anymore
             if (prob.temples[i].prerequisites.empty())
-                candidates.insert(i);
+                candidates[num_candidates++] = {i, 0};
         }
 
-        // Remove the current temple from the candidates
-        candidates.erase(chosen.idx);
-        prev_chosen = chosen;
+        // Remove chosen candidate from candidates
+        candidates[chosen_candidate_idx] = candidates[--num_candidates];
 
         // Choose the next temple from candidates
-        chosen = choose_candidate(prob, candidates, chosen.idx, alpha, rng);
+        chosen_candidate_idx = choose_candidate(prob, candidates, num_candidates, chosen_candidate.idx, alpha, rng);
+        chosen_candidate = candidates[chosen_candidate_idx];
     }
 
-    sol.value += chosen.distance;
-    sol.route[prob.num_temples - 1] = chosen.idx;
+    sol.value += chosen_candidate.distance;
+    sol.route[prob.num_temples - 1] = chosen_candidate.idx;
 }
 
 // Copy problem a to b, which must have already been allocated
@@ -347,6 +339,7 @@ solution grasp(
     problem prob_tmp;
     prob_tmp.temples = new temple[prob.num_temples];
 
+    candidate *candidates = new candidate[prob.num_temples];
     bool *prereq_forward = new bool[prob.num_temples];
     uint *search_order = new uint[prob.num_temples - 1];
     std::iota(search_order, &search_order[prob.num_temples - 1], 0);
@@ -360,7 +353,7 @@ solution grasp(
         }
 
         copy_problem(prob, prob_tmp);
-        greedy_randomized(prob_tmp, sol, alpha, rng);
+        greedy_randomized(prob_tmp, sol, candidates, alpha, rng);
         local_search(sol, prob, prereq_forward, search_order, rng);
 
         if (sol.value < best_sol.value) {
