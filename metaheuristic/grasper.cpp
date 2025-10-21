@@ -16,7 +16,13 @@ using uint = unsigned int;
 using default_clock = std::chrono::steady_clock;
 using second_duration = std::chrono::duration<double, std::ratio<1>>;
 
-#define DEFAULT_ALPHA 0.05
+struct parameters {
+    std::string_view input_path;
+    uint num_iterations;
+    uint seed = std::random_device()();
+    double alpha = 0.05;
+    double time_control = 0;
+};
 
 struct temple {
     uint x;
@@ -45,10 +51,45 @@ struct candidate {
 void print_help()
 {
     std::cout << "GRASPer peregrinação solver using GRASP\n";
-    std::cout << "usage: grasper <file> <num_iterations> <seed> [alpha] [time_control]\n";
+    std::cout << "usage: grasper <file> <num_iterations> [seed] [alpha] [time_control]\n";
 }
 
-const problem& parse_input(std::ifstream file)
+const parameters parse_parameters(int argc, char *argv[])
+{
+    parameters p;
+
+    switch (argc) {
+        case 6:
+            p.time_control = std::atof(argv[5]);
+        case 5:
+            p.alpha = std::atof(argv[4]);
+        case 4:
+            p.seed = std::atoi(argv[3]);
+        case 3:
+            p.input_path = argv[1];
+            p.num_iterations = std::atoi(argv[2]);
+            break;
+        default:
+            print_help();
+            std::cerr << "\nError: Wrong number of parameters\n";
+            std::exit(EXIT_FAILURE);
+    }
+
+    return p;
+}
+
+void print_parameters(const parameters& p)
+{
+    std::cout << "Parameters:\n"
+              << "Number of iterations  " << p.num_iterations << '\n'
+              << "Seed " << std::string(17, ' ') << p.seed << '\n'
+              << "Alpha " << std::string(16, ' ') << p.alpha << '\n';
+
+    if (p.time_control)
+        std::cout << "Time control (s) " << std::string(5, ' ') << p.time_control << '\n';
+}
+
+const problem& parse_input_file(std::ifstream file)
 {
     if (!file) {
         print_help();
@@ -327,32 +368,16 @@ solution grasp(
 
 int main(int argc, char *argv[])
 {
-    std::string_view input_path;
-    uint num_iterations;
-    uint seed;
+    parameters params = parse_parameters(argc, argv);
+    print_parameters(params);
 
-    if (argc < 4) {
-        print_help();
-        std::cerr << "\nError: insufficient number of parameters\n";
-        std::exit(EXIT_FAILURE);
-    }
-
-    input_path = argv[1];
-
-    num_iterations = std::atoi(argv[2]);
-
-    seed = std::atoi(argv[3]);
-    std::mt19937 rng(seed);
-
-    double alpha = (argc > 4) ? std::atof(argv[4]) : DEFAULT_ALPHA;
-
-    double time_control = (argc > 5) ? std::atof(argv[5]) : 0;
+    std::mt19937 rng(params.seed);
 
     std::chrono::time_point<default_clock> timer{default_clock::now()};
 
-    const problem prob = parse_input(std::ifstream(input_path.data()));
+    const problem prob = parse_input_file(std::ifstream(params.input_path.data()));
 
-    grasp(prob, num_iterations, alpha, time_control, rng, timer);
+    grasp(prob, params.num_iterations, params.alpha, params.time_control, rng, timer);
 
     return 0;
 }

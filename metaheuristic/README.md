@@ -14,5 +14,5 @@ g++ grasper.cpp -std=c++17 -O3 -march=native -o grasper
 2. Execute o programa gerado:
 
 ```shell
-./grasper <file> <num_iterations> <seed> [alpha] [time_control]
+./grasper <file> <num_iterations> [seed] [alpha] [time_control]
 ```
