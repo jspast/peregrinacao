@@ -175,7 +175,12 @@ uint choose_candidate(
 
 // Builds a greedy randomized solution for the problem
 // A copy of the problem should be used as it is modified internally
-void greedy_randomized(problem& prob, solution& sol, candidate* candidates, double alpha, std::mt19937& rng)
+void greedy_randomized(
+    problem& prob,
+    solution& sol,
+    candidate* candidates,
+    double alpha,
+    std::mt19937& rng)
 {
     sol.value = 0;
 
@@ -209,7 +214,8 @@ void greedy_randomized(problem& prob, solution& sol, candidate* candidates, doub
         candidates[chosen_candidate_idx] = candidates[--num_candidates];
 
         // Choose the next temple from candidates
-        chosen_candidate_idx = choose_candidate(prob, candidates, num_candidates, chosen_candidate.idx, alpha, rng);
+        chosen_candidate_idx = choose_candidate(prob, candidates, num_candidates,
+                                                chosen_candidate.idx, alpha, rng);
         chosen_candidate = candidates[chosen_candidate_idx];
     }
 
