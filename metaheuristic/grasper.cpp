@@ -106,7 +106,7 @@ void print_parameters(const parameters& p)
 // <prerequisite_idx[num_prerequisites - 1]> <dependent_idx[num_prerequisites - 1]>
 //
 // (prerequisite_idx[] and dependent_idx[] are values between 1 and num_temples)
-const problem& parse_input_file(std::ifstream file)
+const problem parse_input_file(std::ifstream file)
 {
     if (!file) {
         print_help();
@@ -114,23 +114,23 @@ const problem& parse_input_file(std::ifstream file)
         std::exit(EXIT_FAILURE);
     }
 
-    problem *prob = new problem;
+    problem prob;
 
-    file >> prob->num_temples;
-    prob->temples = new temple[prob->num_temples];
-    for (uint i = 0; i < prob->num_temples; ++i)
-        file >> prob->temples[i].pos.x >> prob->temples[i].pos.y;
+    file >> prob.num_temples;
+    prob.temples = new temple[prob.num_temples];
+    for (uint i = 0; i < prob.num_temples; ++i)
+        file >> prob.temples[i].pos.x >> prob.temples[i].pos.y;
 
     uint num_dependencies, prerequisites, dependents;
     file >> num_dependencies;
     for (uint i = 0; i < num_dependencies; ++i) {
         file >> prerequisites >> dependents;
         prerequisites--; dependents--;
-        prob->temples[prerequisites].dependents.insert(dependents);
-        prob->temples[dependents].prerequisites.insert(prerequisites);
+        prob.temples[prerequisites].dependents.insert(dependents);
+        prob.temples[dependents].prerequisites.insert(prerequisites);
     }
 
-    return *prob;
+    return prob;
 }
 
 // Computes the distance between two temple positions
@@ -279,7 +279,7 @@ uint compute_new_sol_value(
     return new_value;
 }
 
-// Continually improves the current solution until a local minimal is reached
+// Continually improves the current solution until a local minimum is reached
 // Uses a 2-opt neighbourhood
 void local_search(
     solution& sol,
@@ -397,6 +397,12 @@ solution grasp(
         }
     }
 
+    delete[] sol.route;
+    delete[] prob_tmp.temples;
+    delete[] candidates;
+    delete[] prereq_forward;
+    delete[] search_order;
+
     return best_sol;
 }
 
@@ -411,7 +417,15 @@ int main(int argc, char *argv[])
 
     const problem prob = parse_input_file(std::ifstream(params.input_path.data()));
 
-    grasp(prob, params.num_iterations, params.alpha, params.time_control, rng, timer);
+    const solution best_sol = grasp(prob,
+                                     params.num_iterations,
+                                     params.alpha,
+                                     params.time_control,
+                                     rng,
+                                     timer);
+
+    delete[] prob.temples;
+    delete[] best_sol.route;
 
     return 0;
 }
