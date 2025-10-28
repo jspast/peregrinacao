@@ -61,10 +61,13 @@ const parameters parse_parameters(int argc, char *argv[])
     switch (argc) {
         case 6:
             p.time_control = std::atof(argv[5]);
+            [[fallthrough]];
         case 5:
             p.alpha = std::atof(argv[4]);
+            [[fallthrough]];
         case 4:
             p.seed = std::atoi(argv[3]);
+            [[fallthrough]];
         case 3:
             p.input_path = argv[1];
             p.num_iterations = std::atoi(argv[2]);
@@ -106,7 +109,7 @@ void print_parameters(const parameters& p)
 // <prerequisite_idx[num_prerequisites - 1]> <dependent_idx[num_prerequisites - 1]>
 //
 // (prerequisite_idx[] and dependent_idx[] are values between 1 and num_temples)
-const problem parse_input_file(std::ifstream file)
+const problem parse_input_file(std::ifstream& file)
 {
     if (!file) {
         print_help();
@@ -135,13 +138,15 @@ const problem parse_input_file(std::ifstream file)
 
 // Computes the distance between two temple positions
 // It is the euclidian distance multiplied by 100 floored
-uint temples_distance(const position a, const position b)
+inline uint temples_distance(const position a, const position b)
 {
-    return std::sqrt((double)((b.x - a.x)*(b.x - a.x) + (b.y - a.y)*(b.y - a.y))) * 100;
+    const int dx = b.x - a.x;
+    const int dy = b.y - a.y;
+    return std::sqrt(dx * dx + dy * dy) * 100;
 }
 
 // Sort function for candidates by the distance
-bool candidate_sorter(const candidate& l, const candidate& r)
+inline bool candidate_sorter(const candidate& l, const candidate& r)
 {
     return l.distance < r.distance;
 }
@@ -227,7 +232,11 @@ void greedy_randomized(
 void copy_problem(const problem& a, problem& b)
 {
     b.num_temples = a.num_temples;
-    std::copy(a.temples, &a.temples[a.num_temples], b.temples);
+    for (uint i = 0; i < a.num_temples; ++i) {
+        b.temples[i].pos = a.temples[i].pos;
+        b.temples[i].prerequisites = a.temples[i].prerequisites;
+        b.temples[i].dependents = a.temples[i].dependents;
+    }
 }
 
 // Verify whether the solution respects all prerequisites
@@ -301,6 +310,7 @@ void local_search(
             uint i = search_order[k];
 
             prereq_forward[sol.route[i]] = true;
+            uint num_set = 1; // Track how many elements we set to true
 
             for (uint j = i + 1; j < prob.num_temples; j++) {
 
@@ -317,9 +327,13 @@ void local_search(
                 }
 
                 prereq_forward[sol.route[j]] = true;
+                num_set++;
             }
 
-            std::fill(prereq_forward, &prereq_forward[prob.num_temples], false);
+            // Only reset the elements we actually set, starting from the current position
+            for (uint idx = i; idx < i + num_set && idx < prob.num_temples; idx++) {
+                prereq_forward[sol.route[idx]] = false;
+            }
         }
     }
 }
@@ -415,7 +429,8 @@ int main(int argc, char *argv[])
 
     std::chrono::time_point<default_clock> timer{default_clock::now()};
 
-    const problem prob = parse_input_file(std::ifstream(params.input_path.data()));
+    std::ifstream input_file(params.input_path.data());
+    const problem prob = parse_input_file(input_file);
 
     const solution best_sol = grasp(prob,
                                      params.num_iterations,
