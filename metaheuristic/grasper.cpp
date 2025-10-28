@@ -135,7 +135,7 @@ const problem parse_input_file(std::ifstream& file)
 
 // Computes the distance between two temple positions
 // It is the euclidian distance multiplied by 100 floored
-inline uint temples_distance(const position& a, const position& b)
+inline uint temples_distance(const position a, const position b)
 {
     const int dx = b.x - a.x;
     const int dy = b.y - a.y;
