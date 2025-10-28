@@ -138,7 +138,7 @@ const problem parse_input_file(std::ifstream& file)
 
 // Computes the distance between two temple positions
 // It is the euclidian distance multiplied by 100 floored
-inline uint temples_distance(const position a, const position b)
+inline uint temples_distance(const position& a, const position& b)
 {
     const int dx = b.x - a.x;
     const int dy = b.y - a.y;
@@ -240,7 +240,7 @@ void copy_problem(const problem& a, problem& b)
 }
 
 // Verify whether the solution respects all prerequisites
-bool is_valid_solution(
+inline bool is_valid_solution(
     const problem& prob,
     const solution& sol,
     uint idx1,
@@ -263,7 +263,7 @@ bool is_valid_solution(
 
 // Efficiently computes the solution value from a 2-opt operation
 // Only recalculates the distance of the new connections
-uint compute_new_sol_value(
+inline uint compute_new_sol_value(
     const problem& prob,
     const solution& sol,
     uint idx1,
@@ -356,13 +356,13 @@ void print_solution(const solution& sol, uint route_size)
     std::cout << sol.route[route_size - 1] + 1 << '\n';
 }
 
-double get_elapsed_time(std::chrono::time_point<default_clock>& timer)
+inline double get_elapsed_time(const std::chrono::time_point<default_clock>& timer)
 {
     return std::chrono::duration_cast<second_duration>
         (default_clock::now() - timer).count();
 }
 
-void print_time(std::chrono::time_point<default_clock>& timer)
+void print_time(const std::chrono::time_point<default_clock>& timer)
 {
     std::cout << std::fixed << std::setprecision(2)
               << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
@@ -374,7 +374,7 @@ solution grasp(
     double alpha,
     double time_control,
     std::mt19937& rng,
-    std::chrono::time_point<default_clock>& timer)
+    const std::chrono::time_point<default_clock>& timer)
 {
     solution sol;
     sol.route = new uint[prob.num_temples];
