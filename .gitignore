@@ -1,7 +1,2 @@
 metaheuristic/grasper
 .cache/
-
-# Benchmark artifacts
-metaheuristic/grasper_original
-metaheuristic/grasper_optimized
-metaheuristic/grasper_optimized.cpp

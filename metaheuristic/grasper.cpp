@@ -61,13 +61,10 @@ const parameters parse_parameters(int argc, char *argv[])
     switch (argc) {
         case 6:
             p.time_control = std::atof(argv[5]);
-            [[fallthrough]];
         case 5:
             p.alpha = std::atof(argv[4]);
-            [[fallthrough]];
         case 4:
             p.seed = std::atoi(argv[3]);
-            [[fallthrough]];
         case 3:
             p.input_path = argv[1];
             p.num_iterations = std::atoi(argv[2]);
@@ -232,11 +229,7 @@ void greedy_randomized(
 void copy_problem(const problem& a, problem& b)
 {
     b.num_temples = a.num_temples;
-    for (uint i = 0; i < a.num_temples; ++i) {
-        b.temples[i].pos = a.temples[i].pos;
-        b.temples[i].prerequisites = a.temples[i].prerequisites;
-        b.temples[i].dependents = a.temples[i].dependents;
-    }
+    std::copy(a.temples, &a.temples[a.num_temples], b.temples);
 }
 
 // Verify whether the solution respects all prerequisites
