@@ -324,7 +324,7 @@ void local_search(
             }
 
             // Only reset the elements we actually set, starting from the current position
-            for (uint idx = i; idx < i + num_set && idx < prob.num_temples; idx++) {
+            for (uint idx = i; idx < i + num_set; idx++) {
                 prereq_forward[sol.route[idx]] = false;
             }
         }
