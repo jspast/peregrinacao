@@ -106,7 +106,7 @@ void print_parameters(const parameters& p)
 // <prerequisite_idx[num_prerequisites - 1]> <dependent_idx[num_prerequisites - 1]>
 //
 // (prerequisite_idx[] and dependent_idx[] are values between 1 and num_temples)
-const problem parse_input_file(std::ifstream file)
+const problem parse_input_file(std::ifstream& file)
 {
     if (!file) {
         print_help();
@@ -135,13 +135,15 @@ const problem parse_input_file(std::ifstream file)
 
 // Computes the distance between two temple positions
 // It is the euclidian distance multiplied by 100 floored
-uint temples_distance(const position a, const position b)
+inline uint temples_distance(const position a, const position b)
 {
-    return std::sqrt((double)((b.x - a.x)*(b.x - a.x) + (b.y - a.y)*(b.y - a.y))) * 100;
+    const int dx = b.x - a.x;
+    const int dy = b.y - a.y;
+    return std::sqrt(dx * dx + dy * dy) * 100;
 }
 
 // Sort function for candidates by the distance
-bool candidate_sorter(const candidate& l, const candidate& r)
+inline bool candidate_sorter(const candidate& l, const candidate& r)
 {
     return l.distance < r.distance;
 }
@@ -231,7 +233,7 @@ void copy_problem(const problem& a, problem& b)
 }
 
 // Verify whether the solution respects all prerequisites
-bool is_valid_solution(
+inline bool is_valid_solution(
     const problem& prob,
     const solution& sol,
     uint idx1,
@@ -254,7 +256,7 @@ bool is_valid_solution(
 
 // Efficiently computes the solution value from a 2-opt operation
 // Only recalculates the distance of the new connections
-uint compute_new_sol_value(
+inline uint compute_new_sol_value(
     const problem& prob,
     const solution& sol,
     uint idx1,
@@ -301,6 +303,7 @@ void local_search(
             uint i = search_order[k];
 
             prereq_forward[sol.route[i]] = true;
+            uint num_set = 1; // Track how many elements we set to true
 
             for (uint j = i + 1; j < prob.num_temples; j++) {
 
@@ -317,9 +320,13 @@ void local_search(
                 }
 
                 prereq_forward[sol.route[j]] = true;
+                num_set++;
             }
 
-            std::fill(prereq_forward, &prereq_forward[prob.num_temples], false);
+            // Only reset the elements we actually set, starting from the current position
+            for (uint idx = i; idx < i + num_set; idx++) {
+                prereq_forward[sol.route[idx]] = false;
+            }
         }
     }
 }
@@ -342,13 +349,13 @@ void print_solution(const solution& sol, uint route_size)
     std::cout << sol.route[route_size - 1] + 1 << '\n';
 }
 
-double get_elapsed_time(std::chrono::time_point<default_clock>& timer)
+inline double get_elapsed_time(const std::chrono::time_point<default_clock>& timer)
 {
     return std::chrono::duration_cast<second_duration>
         (default_clock::now() - timer).count();
 }
 
-void print_time(std::chrono::time_point<default_clock>& timer)
+void print_time(const std::chrono::time_point<default_clock>& timer)
 {
     std::cout << std::fixed << std::setprecision(2)
               << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
@@ -360,7 +367,7 @@ solution grasp(
     double alpha,
     double time_control,
     std::mt19937& rng,
-    std::chrono::time_point<default_clock>& timer)
+    const std::chrono::time_point<default_clock>& timer)
 {
     solution sol;
     sol.route = new uint[prob.num_temples];
@@ -415,7 +422,8 @@ int main(int argc, char *argv[])
 
     std::chrono::time_point<default_clock> timer{default_clock::now()};
 
-    const problem prob = parse_input_file(std::ifstream(params.input_path.data()));
+    std::ifstream input_file(params.input_path.data());
+    const problem prob = parse_input_file(input_file);
 
     const solution best_sol = grasp(prob,
                                      params.num_iterations,
