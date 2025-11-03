@@ -34,6 +34,7 @@ struct temple {
 struct problem {
     uint num_temples;
     temple *temples;
+    uint *distances;
 };
 
 struct solution {
@@ -91,6 +92,26 @@ void print_parameters(const parameters& p)
         std::cout << "Time control (s) " << std::string(5, ' ') << p.time_control << '\n';
 }
 
+// Computes the distance between two temple positions
+// It is the euclidian distance multiplied by 100 floored
+inline uint temples_distance(const position a, const position b)
+{
+    const int dx = b.x - a.x;
+    const int dy = b.y - a.y;
+    return std::sqrt(dx * dx + dy * dy) * 100;
+}
+
+inline void compute_distance_matrix(problem& prob)
+{
+    for (uint i = 0; i < prob.num_temples; ++i) {
+        for (uint j = i + 1; j < prob.num_temples; ++j) {
+            uint distance = temples_distance(prob.temples[i].pos, prob.temples[j].pos);
+            prob.distances[i * prob.num_temples + j] = distance;
+            prob.distances[j * prob.num_temples + i] = distance;
+        }
+    }
+}
+
 // Builds a problem from a file
 //
 // The file should follow this format:
@@ -130,16 +151,10 @@ const problem parse_input_file(std::ifstream& file)
         prob.temples[dependents].prerequisites.insert(prerequisites);
     }
 
-    return prob;
-}
+    prob.distances = new uint[prob.num_temples * prob.num_temples];
+    compute_distance_matrix(prob);
 
-// Computes the distance between two temple positions
-// It is the euclidian distance multiplied by 100 floored
-inline uint temples_distance(const position a, const position b)
-{
-    const int dx = b.x - a.x;
-    const int dy = b.y - a.y;
-    return std::sqrt(dx * dx + dy * dy) * 100;
+    return prob;
 }
 
 // Sort function for candidates by the distance
@@ -160,10 +175,8 @@ uint choose_candidate(
     std::mt19937& rng)
 {
     // For each candidate, compute the distance to the last chosen temple
-    for (uint i = 0; i < num_candidates; ++i) {
-        candidates[i].distance = temples_distance(prob.temples[last_chosen_idx].pos,
-                                                  prob.temples[candidates[i].temple_idx].pos);
-    }
+    for (uint i = 0; i < num_candidates; ++i)
+        candidates[i].distance = prob.distances[last_chosen_idx * prob.num_temples + candidates[i].temple_idx];
 
     std::sort(candidates, &candidates[num_candidates], &candidate_sorter);
 
@@ -230,6 +243,7 @@ void copy_problem(const problem& a, problem& b)
 {
     b.num_temples = a.num_temples;
     std::copy(a.temples, &a.temples[a.num_temples], b.temples);
+    std::copy(a.distances, &a.distances[a.num_temples * a.num_temples], b.distances);
 }
 
 // Verify whether the solution respects all prerequisites
@@ -265,17 +279,13 @@ inline uint compute_new_sol_value(
     uint new_value = sol.value;
 
     if (idx2 + 1 < prob.num_temples) {
-        new_value -= temples_distance(prob.temples[sol.route[idx2]].pos,
-                                      prob.temples[sol.route[idx2 + 1]].pos);
-        new_value += temples_distance(prob.temples[sol.route[idx1]].pos,
-                                      prob.temples[sol.route[idx2 + 1]].pos);
+        new_value -= prob.distances[sol.route[idx2] * prob.num_temples + sol.route[idx2 + 1]];
+        new_value += prob.distances[sol.route[idx1] * prob.num_temples + sol.route[idx2 + 1]];
     }
 
     if (idx1 > 0) {
-        new_value -= temples_distance(prob.temples[sol.route[idx1 - 1]].pos,
-                                      prob.temples[sol.route[idx1]].pos);
-        new_value += temples_distance(prob.temples[sol.route[idx1 - 1]].pos,
-                                      prob.temples[sol.route[idx2]].pos);
+        new_value -= prob.distances[sol.route[idx1 - 1] * prob.num_temples + sol.route[idx1]];
+        new_value += prob.distances[sol.route[idx1 - 1] * prob.num_temples + sol.route[idx2]];
     }
 
     return new_value;
@@ -378,6 +388,7 @@ solution grasp(
 
     problem prob_tmp;
     prob_tmp.temples = new temple[prob.num_temples];
+    prob_tmp.distances = new uint[prob.num_temples * prob.num_temples];
 
     candidate *candidates = new candidate[prob.num_temples];
     bool *prereq_forward = new bool[prob.num_temples];
