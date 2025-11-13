@@ -182,7 +182,8 @@ uint choose_candidate(
 {
     // For each candidate, compute the distance to the last chosen temple
     for (uint i = 0; i < num_candidates; ++i)
-        candidates[i].distance = prob.distances[last_chosen_idx * prob.num_temples + candidates[i].temple_idx];
+        candidates[i].distance = prob.distances[last_chosen_idx * prob.num_temples +
+                                                candidates[i].temple_idx];
 
     std::sort(candidates, &candidates[num_candidates], &candidate_sorter);
 
@@ -285,13 +286,17 @@ inline uint compute_new_sol_value(
     uint new_value = sol.value;
 
     if (idx2 + 1 < prob.num_temples) {
-        new_value -= prob.distances[sol.route[idx2] * prob.num_temples + sol.route[idx2 + 1]];
-        new_value += prob.distances[sol.route[idx1] * prob.num_temples + sol.route[idx2 + 1]];
+        new_value -= prob.distances[sol.route[idx2] * prob.num_temples +
+                                    sol.route[idx2 + 1]];
+        new_value += prob.distances[sol.route[idx1] * prob.num_temples +
+                                    sol.route[idx2 + 1]];
     }
 
     if (idx1 > 0) {
-        new_value -= prob.distances[sol.route[idx1 - 1] * prob.num_temples + sol.route[idx1]];
-        new_value += prob.distances[sol.route[idx1 - 1] * prob.num_temples + sol.route[idx2]];
+        new_value -= prob.distances[sol.route[idx1 - 1] * prob.num_temples +
+                                    sol.route[idx1]];
+        new_value += prob.distances[sol.route[idx1 - 1] * prob.num_temples +
+                                    sol.route[idx2]];
     }
 
     return new_value;
@@ -345,7 +350,10 @@ uint local_search(
         // Explore the neighbourhood in a different order each time
         std::shuffle(search_order, &search_order[prob.num_temples - 1], rng);
 
-        for (uint k = 0; k < prob.num_temples - 1 && !was_improvement && max_iterations > 0; k++) {
+        for (uint k = 0; k < prob.num_temples - 1; k++) {
+            if (max_iterations < 0 || was_improvement)
+                break;
+
             uint i = search_order[k];
 
             prereq_forward[sol.route[i]] = true;
