@@ -67,14 +67,14 @@ const parameters parse_parameters(int argc, char *argv[])
 
     switch (argc) {
         case 6:
-            p.time_limit = std::atof(argv[5]);
+            p.time_limit = std::stod(argv[5]);
         case 5:
-            p.alpha = std::atof(argv[4]);
+            p.alpha = std::stod(argv[4]);
         case 4:
-            p.seed = std::atoi(argv[3]);
+            p.seed = std::stoi(argv[3]);
         case 3:
             p.input_path = argv[1];
-            p.num_iterations = std::atoi(argv[2]);
+            p.num_iterations = std::stoi(argv[2]);
             break;
         default:
             print_help();
