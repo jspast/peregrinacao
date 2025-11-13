@@ -17,7 +17,13 @@ struct parameters {
     uint num_iterations;
     uint seed = std::random_device()();
     double alpha = 0.05;
-    double time_control = 0;
+    double time_limit = 0;
+};
+
+struct time_info {
+    std::chrono::time_point<default_clock> timer{default_clock::now()};
+    double time_limit = 0;
+    uint total_iterations = 0;
 };
 
 struct position {
@@ -50,18 +56,18 @@ struct candidate {
 void print_help()
 {
     std::cout << "GRASPer peregrinação solver using GRASP\n";
-    std::cout << "usage: grasper <file> <num_iterations> [seed] [alpha] [time_control]\n";
+    std::cout << "usage: grasper <file> <num_iterations> [seed] [alpha] [time_limit]\n";
 }
 
 // Parses parameter values from the CLI arguments
-// <file> <num_iterations> [seed] [alpha] [time_control]
+// <file> <num_iterations> [seed] [alpha] [time_limit]
 const parameters parse_parameters(int argc, char *argv[])
 {
     parameters p;
 
     switch (argc) {
         case 6:
-            p.time_control = std::atof(argv[5]);
+            p.time_limit = std::atof(argv[5]);
         case 5:
             p.alpha = std::atof(argv[4]);
         case 4:
@@ -88,8 +94,8 @@ void print_parameters(const parameters& p)
               << "Seed " << std::string(17, ' ') << p.seed << '\n'
               << "Alpha " << std::string(16, ' ') << p.alpha << '\n';
 
-    if (p.time_control)
-        std::cout << "Time control (s) " << std::string(5, ' ') << p.time_control << '\n';
+    if (p.time_limit)
+        std::cout << "Time control (s) " << std::string(5, ' ') << p.time_limit << '\n';
 }
 
 // Computes the distance between two temple positions
@@ -291,33 +297,65 @@ inline uint compute_new_sol_value(
     return new_value;
 }
 
-// Continually improves the current solution until a local minimum is reached
+inline double get_elapsed_time(const std::chrono::time_point<default_clock>& timer)
+{
+    return std::chrono::duration_cast<second_duration>
+        (default_clock::now() - timer).count();
+}
+
+inline void print_time(const std::chrono::time_point<default_clock>& timer)
+{
+    std::cout << std::fixed << std::setprecision(2)
+              << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
+}
+
+// Returns true and prints the current iteration and time if timer reached time_limit
+// Returns false if not
+inline bool check_time_limit(time_info t)
+{
+    if (t.time_limit && get_elapsed_time(t.timer) > t.time_limit) {
+        t.time_limit = 0;
+        std::cout << "\nLast iteration: " << t.total_iterations - 1 << '\n';
+        print_time(t.timer);
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+// Improves the current solution until a local minimum or max_iterations is reached
 // Uses a 2-opt neighbourhood
-void local_search(
+// Returns the number of iterations left
+uint local_search(
     solution& sol,
     const problem& prob,
     bool *prereq_forward,
     uint *search_order,
+    uint max_iterations,
+    time_info& time_info,
     std::mt19937& rng)
 {
     uint cur_value;
     bool was_improvement = true;
 
-    while (was_improvement) {
+    while (was_improvement && max_iterations) {
         was_improvement = false;
 
         // Explore the neighbourhood in a different order each time
         std::shuffle(search_order, &search_order[prob.num_temples - 1], rng);
 
-        for (uint k = 0; k < prob.num_temples - 1 && !was_improvement; k++) {
+        for (uint k = 0; k < prob.num_temples - 1 && !was_improvement && max_iterations > 0; k++) {
             uint i = search_order[k];
 
             prereq_forward[sol.route[i]] = true;
             uint num_set = 1; // Track how many elements we set to true
 
-            for (uint j = i + 1; j < prob.num_temples; j++) {
+            for (uint j = i + 1; j < prob.num_temples; j++, time_info.total_iterations++) {
+                if (check_time_limit(time_info))
+                    max_iterations = 1; // Effectively stop local search
 
-                if (!is_valid_solution(prob, sol, i, j, prereq_forward))
+                if (!--max_iterations || !is_valid_solution(prob, sol, i, j, prereq_forward))
                     break;
 
                 cur_value = compute_new_sol_value(prob, sol, i, j);
@@ -333,16 +371,18 @@ void local_search(
                 num_set++;
             }
 
-            // Only reset the elements we actually set, starting from the current position
+            // Only reset the elements we actually set
             for (uint idx = i; idx < i + num_set; idx++) {
                 prereq_forward[sol.route[idx]] = false;
             }
         }
     }
+
+    return max_iterations;
 }
 
 // Copy solution a to b, which must have already been allocated
-void copy_solution(const struct solution& a, struct solution& b, uint route_size)
+void copy_solution(const solution& a, solution& b, uint route_size)
 {
     b.value = a.value;
     std::copy(a.route, &a.route[route_size], b.route);
@@ -359,25 +399,22 @@ void print_solution(const solution& sol, uint route_size)
     std::cout << sol.route[route_size - 1] + 1 << '\n';
 }
 
-inline double get_elapsed_time(const std::chrono::time_point<default_clock>& timer)
+void update_best_solution(const solution& sol, solution& best_sol, uint sol_size, time_info& t)
 {
-    return std::chrono::duration_cast<second_duration>
-        (default_clock::now() - timer).count();
-}
-
-void print_time(const std::chrono::time_point<default_clock>& timer)
-{
-    std::cout << std::fixed << std::setprecision(2)
-              << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
+    if (sol.value < best_sol.value) {
+        copy_solution(sol, best_sol, sol_size);
+        std::cout << '\n';
+        print_time(t.timer);
+        print_solution(sol, sol_size);
+    }
 }
 
 solution grasp(
     const problem& prob,
     uint num_iterations,
     double alpha,
-    double time_control,
-    std::mt19937& rng,
-    const std::chrono::time_point<default_clock>& timer)
+    time_info& time_info,
+    std::mt19937& rng)
 {
     solution sol;
     sol.route = new uint[prob.num_temples];
@@ -395,24 +432,30 @@ solution grasp(
     uint *search_order = new uint[prob.num_temples - 1];
     std::iota(search_order, &search_order[prob.num_temples - 1], 0);
 
-    for (uint i = 0; i < num_iterations; ++i) {
-        if (time_control && get_elapsed_time(timer) > time_control) {
-            time_control = 0;
-            std::cout << '\n';
-            std::cout << "Iteration " << i << " started" << '\n';
-            print_time(timer);
-        }
+    int iterations_left = num_iterations;
 
+    while (iterations_left > 0 && !check_time_limit(time_info)) {
+        iterations_left -= prob.num_temples;
+        if (iterations_left < 0)
+            break;
+
+        // Update number of total iterations run
+        time_info.total_iterations += prob.num_temples;
+
+        // Build greedy randomized initial solution
         copy_problem(prob, prob_tmp);
         greedy_randomized(prob_tmp, sol, candidates, alpha, rng);
-        local_search(sol, prob, prereq_forward, search_order, rng);
 
-        if (sol.value < best_sol.value) {
-            copy_solution(sol, best_sol, prob.num_temples);
-            std::cout << '\n';
-            print_time(timer);
-            print_solution(sol, prob.num_temples);
-        }
+        // Run local search
+        iterations_left = local_search(sol,
+                                       prob,
+                                       prereq_forward,
+                                       search_order,
+                                       iterations_left,
+                                       time_info,
+                                       rng);
+
+        update_best_solution(sol, best_sol, prob.num_temples, time_info);
     }
 
     delete[] sol.route;
@@ -431,17 +474,17 @@ int main(int argc, char *argv[])
 
     std::mt19937 rng(params.seed);
 
-    std::chrono::time_point<default_clock> timer{default_clock::now()};
+    time_info time_info;
+    time_info.time_limit = params.time_limit;
 
     std::ifstream input_file(params.input_path.data());
     const problem prob = parse_input_file(input_file);
 
     const solution best_sol = grasp(prob,
-                                     params.num_iterations,
-                                     params.alpha,
-                                     params.time_control,
-                                     rng,
-                                     timer);
+                                    params.num_iterations,
+                                    params.alpha,
+                                    time_info,
+                                    rng);
 
     delete[] prob.temples;
     delete[] best_sol.route;
