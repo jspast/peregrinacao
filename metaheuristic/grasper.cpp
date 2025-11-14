@@ -351,7 +351,7 @@ uint local_search(
         std::shuffle(search_order, &search_order[prob.num_temples - 1], rng);
 
         for (uint k = 0; k < prob.num_temples - 1; k++) {
-            if (max_iterations < 0 || was_improvement)
+            if (!max_iterations || was_improvement)
                 break;
 
             uint i = search_order[k];
