@@ -9,12 +9,13 @@
 #include <unordered_set>
 
 using uint = unsigned int;
+using ulong = unsigned long;
 using default_clock = std::chrono::steady_clock;
 using second_duration = std::chrono::duration<double, std::ratio<1>>;
 
 struct parameters {
     std::string_view input_path;
-    uint num_iterations;
+    ulong num_iterations;
     uint seed = std::random_device()();
     double alpha = 0.05;
     double time_limit = 0;
@@ -23,7 +24,7 @@ struct parameters {
 struct time_info {
     std::chrono::time_point<default_clock> timer{default_clock::now()};
     double time_limit = 0;
-    uint total_iterations = 0;
+    ulong total_iterations = 0;
 };
 
 struct position {
@@ -74,7 +75,7 @@ const parameters parse_parameters(int argc, char *argv[])
             p.seed = std::stoi(argv[3]);
         case 3:
             p.input_path = argv[1];
-            p.num_iterations = std::stoi(argv[2]);
+            p.num_iterations = std::stoul(argv[2]);
             break;
         default:
             print_help();
@@ -332,12 +333,12 @@ inline bool check_time_limit(time_info t)
 // Improves the current solution until a local minimum or max_iterations is reached
 // Uses a 2-opt neighbourhood
 // Returns the number of iterations left
-uint local_search(
+ulong local_search(
     solution& sol,
     const problem& prob,
     bool *prereq_forward,
     uint *search_order,
-    uint max_iterations,
+    ulong max_iterations,
     time_info& time_info,
     std::mt19937& rng)
 {
@@ -419,7 +420,7 @@ void update_best_solution(const solution& sol, solution& best_sol, uint sol_size
 
 solution grasp(
     const problem& prob,
-    uint num_iterations,
+    ulong num_iterations,
     double alpha,
     time_info& time_info,
     std::mt19937& rng)
@@ -440,7 +441,7 @@ solution grasp(
     uint *search_order = new uint[prob.num_temples - 1];
     std::iota(search_order, &search_order[prob.num_temples - 1], 0);
 
-    int iterations_left = num_iterations;
+    long iterations_left = num_iterations;
 
     while (iterations_left > 0 && !check_time_limit(time_info)) {
         iterations_left -= prob.num_temples;
