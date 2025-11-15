@@ -35,7 +35,7 @@ struct position {
 struct temple {
     position pos;
     std::unordered_set<uint> prerequisites;
-    std::unordered_set<uint> dependents;
+    std::vector<uint> dependents;
 };
 
 struct problem {
@@ -154,7 +154,7 @@ const problem parse_input_file(std::ifstream& file)
     for (uint i = 0; i < num_dependencies; ++i) {
         file >> prerequisites >> dependents;
         prerequisites--; dependents--;
-        prob.temples[prerequisites].dependents.insert(dependents);
+        prob.temples[prerequisites].dependents.push_back(dependents);
         prob.temples[dependents].prerequisites.insert(prerequisites);
     }
 
