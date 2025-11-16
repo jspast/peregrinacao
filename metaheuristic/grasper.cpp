@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <chrono>
+#include <cstring>
+#include <format>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -9,22 +11,23 @@
 #include <unordered_set>
 
 using uint = unsigned int;
-using ulong = unsigned long;
 using default_clock = std::chrono::steady_clock;
 using second_duration = std::chrono::duration<double, std::ratio<1>>;
 
 struct parameters {
     std::string_view input_path;
-    ulong num_iterations;
+    long iterations_limit;
     uint seed = std::random_device()();
     double alpha = 0.05;
     double time_limit = 0;
+    bool generate_results = false;
 };
 
 struct runtime_info {
     std::chrono::time_point<default_clock> timer{default_clock::now()};
     double time_limit = 0;
-    ulong total_iterations = 0;
+    long total_iterations = 0;
+    long grasp_iterations = 0;
 };
 
 struct position {
@@ -56,31 +59,64 @@ struct candidate {
 
 void print_help()
 {
-    std::cout << "GRASPer peregrinação solver using GRASP\n";
-    std::cout << "usage: grasper <file> <num_iterations> [seed] [alpha] [time_limit]\n";
+    std::cout << "GRASPer peregrinação solver using GRASP\n"
+              << "Usage: grasper <file> [iterations_limit] [seed] [ADDITIONAL_OPTIONS]\n"
+              << "Example: grasper 01.txt 50000 1 -a=0.2\n\n"
+              << "Additional options:\n"
+              << "-a, --alpha=FLOAT\n"
+              << "-t, --time-limit=FLOAT\n"
+              << "    --generate-results\n";
 }
 
 // Parses parameter values from the CLI arguments
-// <file> <num_iterations> [seed] [alpha] [time_limit]
+// <file> [iterations_limit] [seed] [ADDITIONAL_OPTIONS]
 const parameters parse_parameters(int argc, char *argv[])
 {
+    if (argc < 3) {
+        print_help();
+        std::cerr << "\nError: Wrong number of parameters\n";
+        std::exit(EXIT_FAILURE);
+    }
+
     parameters p;
 
-    switch (argc) {
-        case 6:
-            p.time_limit = std::stod(argv[5]);
-        case 5:
-            p.alpha = std::stod(argv[4]);
-        case 4:
-            p.seed = std::stoi(argv[3]);
-        case 3:
-            p.input_path = argv[1];
-            p.num_iterations = std::stoul(argv[2]);
-            break;
-        default:
-            print_help();
-            std::cerr << "\nError: Wrong number of parameters\n";
-            std::exit(EXIT_FAILURE);
+    // Required file parameter
+    p.input_path = argv[1];
+
+    int parameter_pos = 2;
+
+    for (int i = parameter_pos; i < argc; ++i) {
+        if (std::strncmp(argv[i], "-", 1) != 0) {
+            if (i == 2) {
+                p.iterations_limit = std::stoul(argv[i]);
+            }
+            else if (i == 3) {
+                p.seed = std::stoi(argv[i]);
+            }
+            else {
+                print_help();
+                std::cerr << "\nError: Unexpected parameter: " << argv[i] << "\n";
+                std::exit(EXIT_FAILURE);
+            }
+        }
+        // Check alpha
+        else if (std::strncmp(argv[i], "--alpha=", 8) == 0) {
+            p.alpha = std::stod(&argv[i][8]);
+        }
+        else if (std::strncmp(argv[i], "-a=", 3) == 0) {
+            p.alpha = std::stod(&argv[i][3]);
+        }
+        // Check time-limit
+        else if (std::strncmp(argv[i], "--time-limit=", 13) == 0) {
+            p.time_limit = std::stod(&argv[i][13]);
+        }
+        else if (std::strncmp(argv[i], "-t=", 3) == 0) {
+            p.time_limit = std::stod(&argv[i][3]);
+        }
+        // Check generate-results
+        else if (std::strncmp(argv[i], "--generate-results", 18) == 0) {
+            p.generate_results = true;
+        }
     }
 
     return p;
@@ -91,7 +127,7 @@ const parameters parse_parameters(int argc, char *argv[])
 void print_parameters(const parameters& p)
 {
     std::cout << "Parameters:\n"
-              << "Number of iterations  " << p.num_iterations << '\n'
+              << "Number of iterations  " << p.iterations_limit << '\n'
               << "Seed " << std::string(17, ' ') << p.seed << '\n'
               << "Alpha " << std::string(16, ' ') << p.alpha << '\n';
 
@@ -197,13 +233,42 @@ uint choose_candidate(
     return dist(rng);
 }
 
+inline double get_elapsed_time(const std::chrono::time_point<default_clock>& timer)
+{
+    return std::chrono::duration_cast<second_duration>
+        (default_clock::now() - timer).count();
+}
+
+inline void print_time(const std::chrono::time_point<default_clock>& timer)
+{
+    std::cout << std::fixed << std::setprecision(2)
+              << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
+}
+
+// Returns true and prints the current iteration and time if timer reached time_limit
+// Returns false if not
+inline bool check_time_limit(runtime_info info)
+{
+    if (info.time_limit && get_elapsed_time(info.timer) > info.time_limit) {
+        info.time_limit = 0;
+        std::cout << "\nLast iteration: " << info.total_iterations - 1 << '\n';
+        print_time(info.timer);
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
 // Builds a greedy randomized solution for the problem
 // A copy of the problem should be used as it is modified internally
-void greedy_randomized(
+// Returns whether a complete solution was able to be constructed
+bool greedy_randomized(
     problem& prob,
     solution& sol,
     candidate* candidates,
     double alpha,
+    runtime_info& info,
     std::mt19937& rng)
 {
     uint num_candidates = 0;
@@ -219,6 +284,8 @@ void greedy_randomized(
 
     sol.value = 0;
     for (uint route_size = 0; route_size < prob.num_temples - 1; route_size++) {
+        if (check_time_limit(info))
+            return false;
 
         sol.value += chosen_candidate.distance;
         sol.route[route_size] = chosen_candidate.temple_idx;
@@ -244,6 +311,8 @@ void greedy_randomized(
     // Skip removing the prerequisite of the last chosen temple
     sol.value += chosen_candidate.distance;
     sol.route[prob.num_temples - 1] = chosen_candidate.temple_idx;
+
+    return true;
 }
 
 // Copy problem a to b, which must have already been allocated
@@ -303,56 +372,29 @@ inline uint compute_new_sol_value(
     return new_value;
 }
 
-inline double get_elapsed_time(const std::chrono::time_point<default_clock>& timer)
-{
-    return std::chrono::duration_cast<second_duration>
-        (default_clock::now() - timer).count();
-}
-
-inline void print_time(const std::chrono::time_point<default_clock>& timer)
-{
-    std::cout << std::fixed << std::setprecision(2)
-              << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
-}
-
-// Returns true and prints the current iteration and time if timer reached time_limit
-// Returns false if not
-inline bool check_time_limit(runtime_info info)
-{
-    if (info.time_limit && get_elapsed_time(info.timer) > info.time_limit) {
-        info.time_limit = 0;
-        std::cout << "\nLast iteration: " << info.total_iterations - 1 << '\n';
-        print_time(info.timer);
-        return true;
-    }
-    else {
-        return false;
-    }
-}
-
 // Improves the current solution until a local minimum or max_iterations is reached
 // Uses a 2-opt neighbourhood
 // Returns the number of iterations left
-ulong local_search(
+long local_search(
     solution& sol,
     const problem& prob,
     bool *prereq_forward,
     uint *search_order,
-    ulong max_iterations,
+    long iterations_limit,
     runtime_info& info,
     std::mt19937& rng)
 {
-    uint cur_value;
     bool was_improvement = true;
+    long iterations_left = iterations_limit;
 
-    while (was_improvement && max_iterations) {
+    while (was_improvement && iterations_left > 0) {
         was_improvement = false;
 
         // Explore the neighbourhood in a different order each time
         std::shuffle(search_order, &search_order[prob.num_temples - 1], rng);
 
         for (uint k = 0; k < prob.num_temples - 1; k++) {
-            if (!max_iterations || was_improvement)
+            if (iterations_left <= 0 || was_improvement)
                 break;
 
             uint i = search_order[k];
@@ -360,14 +402,18 @@ ulong local_search(
             prereq_forward[sol.route[i]] = true;
             uint num_set = 1; // Track how many elements we set to true
 
-            for (uint j = i + 1; j < prob.num_temples; j++, info.total_iterations++) {
+            for (uint j = i + 1; j < prob.num_temples; j++) {
                 if (check_time_limit(info))
-                    max_iterations = 1; // Effectively stop local search
+                    iterations_left = 1; // Effectively stop local search
 
-                if (!--max_iterations || !is_valid_solution(prob, sol, i, j, prereq_forward))
+                iterations_left--; info.total_iterations++;
+                if (iterations_left <= 0)
                     break;
 
-                cur_value = compute_new_sol_value(prob, sol, i, j);
+                if (!is_valid_solution(prob, sol, i, j, prereq_forward))
+                    break;
+
+                uint cur_value = compute_new_sol_value(prob, sol, i, j);
 
                 if (cur_value < sol.value) {
                     std::reverse(&sol.route[i], &sol.route[j + 1]);
@@ -387,7 +433,7 @@ ulong local_search(
         }
     }
 
-    return max_iterations;
+    return iterations_left;
 }
 
 // Copy solution a to b, which must have already been allocated
@@ -424,7 +470,7 @@ void update_best_solution(
 
 solution grasp(
     const problem& prob,
-    ulong num_iterations,
+    long iterations_limit,
     double alpha,
     runtime_info& info,
     std::mt19937& rng)
@@ -445,29 +491,34 @@ solution grasp(
     uint *search_order = new uint[prob.num_temples - 1];
     std::iota(search_order, &search_order[prob.num_temples - 1], 0);
 
-    long iterations_left = num_iterations;
+    long iterations_left = iterations_limit;
 
     while (iterations_left > 0 && !check_time_limit(info)) {
-        iterations_left -= prob.num_temples;
-        if (iterations_left < 0)
+        // Building initial solution requires num_temples iterations
+        if (iterations_left - prob.num_temples <= 0)
             break;
 
         // Update number of total iterations run
         info.total_iterations += prob.num_temples;
+        iterations_left -= prob.num_temples;
 
         // Build greedy randomized initial solution
         copy_problem(prob, prob_tmp);
-        greedy_randomized(prob_tmp, sol, candidates, alpha, rng);
+        if (!greedy_randomized(prob_tmp, sol, candidates, alpha, info, rng))
+            break;
 
         // Run local search
         iterations_left = local_search(sol, prob, prereq_forward, search_order,
                                        iterations_left, info, rng);
 
         update_best_solution(sol, best_sol, prob.num_temples, info);
+
+        info.grasp_iterations++;
     }
 
     delete[] sol.route;
     delete[] prob_tmp.temples;
+    delete[] prob_tmp.distances;
     delete[] candidates;
     delete[] prereq_forward;
     delete[] search_order;
@@ -475,23 +526,92 @@ solution grasp(
     return best_sol;
 }
 
+void time_results(const problem& prob, double time, std::ofstream& csv)
+{
+    double alpha = 0.05;
+
+    // First run
+    long iterations = std::numeric_limits<long>::max();
+    std::mt19937 rng(1);
+    runtime_info info1;
+    info1.time_limit = time;
+
+    solution best_sol1 = grasp(prob, iterations, alpha, info1, rng);
+    delete[] best_sol1.route;
+
+    // Get the total of iterations from the first run
+    iterations = info1.total_iterations;
+    csv << std::format("{},{},{},{},{},{},{}\n", time, alpha, 1, info1.total_iterations,
+                        info1.grasp_iterations, get_elapsed_time(info1.timer), best_sol1.value);
+
+    // Next alpha=0.05 runs
+    for (uint seed = 2; seed <= 5; ++seed) {
+        rng.seed(seed);
+        runtime_info info;
+        solution best_sol = grasp(prob, iterations, alpha, info, rng);
+        delete[] best_sol.route;
+        csv << std::format("{},{},{},{},{},{},{}\n", time, alpha, seed, info.total_iterations,
+                            info.grasp_iterations, get_elapsed_time(info.timer), best_sol.value);
+    }
+
+    // alpha=0.2 runs
+    alpha = 0.2;
+    for (uint seed = 1; seed <= 5; ++seed) {
+        rng.seed(seed);
+        runtime_info info;
+        solution best_sol = grasp(prob, iterations, alpha, info, rng);
+        delete[] best_sol.route;
+        csv << std::format("{},{},{},{},{},{},{}\n", time, alpha, seed, info.total_iterations,
+                            info.grasp_iterations, get_elapsed_time(info.timer), best_sol.value);
+    }
+}
+
+void generate_results(parameters& params, uint num_instances = 10)
+{
+    for (uint i = 1; i <= num_instances; ++i) {
+        std::string path = std::format("{}{:02}.txt", params.input_path, i);
+        std::ifstream input(path);
+        const problem prob = parse_input_file(input);
+        input.close();
+
+        path = std::format("{}{:02}.csv", params.input_path, i);
+        std::ofstream csv(path);
+        csv << "tempo_alvo,alpha,seed,iterações_parciais,iterações_grasp,tempo_execução,valor\n";
+
+        time_results(prob, 5, csv);
+        csv.flush();
+        time_results(prob, 300, csv);
+
+        csv.close();
+        delete[] prob.temples;
+        delete[] prob.distances;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     parameters params = parse_parameters(argc, argv);
     print_parameters(params);
 
-    std::mt19937 rng(params.seed);
+    if (!params.generate_results) {
+        std::mt19937 rng(params.seed);
 
-    std::ifstream input_file(params.input_path.data());
-    const problem prob = parse_input_file(input_file);
+        std::ifstream input_file(params.input_path.data());
+        const problem prob = parse_input_file(input_file);
+        input_file.close();
 
-    runtime_info info;
-    info.time_limit = params.time_limit;
+        runtime_info info;
+        info.time_limit = params.time_limit;
 
-    const solution best_sol = grasp(prob, params.num_iterations, params.alpha, info, rng);
+        solution best_sol = grasp(prob, params.iterations_limit, params.alpha, info, rng);
 
-    delete[] prob.temples;
-    delete[] best_sol.route;
+        delete[] best_sol.route;
+        delete[] prob.temples;
+        delete[] prob.distances;
+    }
+    else {
+        generate_results(params);
+    }
 
     return 0;
 }

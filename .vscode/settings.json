@@ -42,5 +42,8 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "clangd.fallbackFlags": [
+        "-std=c++20"
+    ]
 }
