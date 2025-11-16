@@ -189,9 +189,18 @@ const problem parse_input_file(std::ifstream& file)
     file >> num_dependencies;
     for (uint i = 0; i < num_dependencies; ++i) {
         file >> prerequisites >> dependents;
-        prerequisites--; dependents--;
+        prerequisites--; dependents--; // For 0-based indexing
         prob.temples[prerequisites].dependents.push_back(dependents);
         prob.temples[dependents].prerequisites.insert(prerequisites);
+    }
+
+    // Ensure there are no duplicates on dependents vector
+    for (uint i = 0; i < prob.num_temples; ++i) {
+        std::sort(prob.temples[i].dependents.begin(), prob.temples[i].dependents.end());
+
+        prob.temples[i].dependents.erase(
+            std::unique(prob.temples[i].dependents.begin(), prob.temples[i].dependents.end()),
+            prob.temples[i].dependents.end());
     }
 
     prob.distances = new uint[prob.num_temples * prob.num_temples];
