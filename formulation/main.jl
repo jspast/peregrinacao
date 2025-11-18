@@ -9,7 +9,7 @@ end
 function main()
     # Read command line arguments
     if length(ARGS) < 3
-        println("Usage: julia sop_pli.jl <arquivo> <max_time> <seed>")
+        println("Usage: julia main.jl <input_filename> <max_time> <seed>")
         exit(1)
     end
 
@@ -76,49 +76,46 @@ function main()
         end
     end
 
-    println("Pre processing done. Starting optimization...")
-
-
-    # ----  EARLIEST / LATEST  ----
+    # Compute earliest and latest positions for each temple
     earliest = zeros(Int, T)
     for t in 1:T
         earliest[t] = 1 + count(i -> tc_prereqs_matrix[i,t] == 1, 1:T)
     end
-
     latest = zeros(Int, T)
     for t in 1:T
         latest[t] = T - count(j -> tc_prereqs_matrix[t,j] == 1, 1:T)
     end
 
+    println("Pre processing done. Starting optimization...")
 
-    # ---- DEFINE MODEL ----
+
+    # Defining model
     m = Model(HiGHS.Optimizer)
     set_optimizer_attribute(m, "time_limit", max_time)
     set_optimizer_attribute(m, "random_seed", seed)
 
 
-    # ---- DECISION VARIABLES ----
-    # x[i,j] = 1 se j é visitado imediatamente após i
+    # Decision variables
+    # x[i,j] = 1 if j is visisted immediately after i
     @variable(m, x[1:T, 1:T], Bin)
     @constraint(m, [i=1:T], x[i,i] == 0)
 
-    # fluxo único (single commodity)
+    # Single commodity flow
     @variable(m, f[1:T, 1:T] >= 0)
 
-
-    # ---- DEGREE CONSTRAINTS ----
-    @constraint(m, [i=1:T], sum(x[i,j] for j in 1:T) <= 1)   # cada nó tem <= 1 sucessor
-    @constraint(m, [j=1:T], sum(x[i,j] for i in 1:T) <= 1)   # cada nó tem <= 1 predecessor
+    # Degree constraints
+    @constraint(m, [i=1:T], sum(x[i,j] for j in 1:T) <= 1)   # each node has <= 1 successor
+    @constraint(m, [j=1:T], sum(x[i,j] for i in 1:T) <= 1)   # each node has <= 1 predecessor
     @constraint(m, sum(x) == T-1)
 
-    # ---- PRECEDÊNCIA: proibir arcos inválidos ----
+    # Precedence: prohibit invalid arcs
     for i in 1:T, j in 1:T
         if tc_prereqs_matrix[j,i] == 1
-            @constraint(m, x[i,j] == 0)     # não pode ir de i para j
+            @constraint(m, x[i,j] == 0)     # cannot go from i to j
         end
     end
 
-    # ---- OTIMIZAÇÃO A2: eliminar arcos que quebram earliest/latest ----
+    # Optimization 1: prohibit arcs that violate earliest/latest
     for i in 1:T, j in 1:T
         if earliest[j] > latest[i] + 1
             @constraint(m, x[i,j] == 0)
@@ -128,24 +125,24 @@ function main()
         end
     end
 
-    # ---- OTIMIZAÇÃO A1 + A3: SINGLE COMMODITY FLOW ----
+    # Optimization 2: limit capacity of the flow
 
-    # Capacidade baseada em janelas, não em T
+    # Capacity based on windows, not on T
     cap = maximum(latest[i] - earliest[i] for i in 1:T)
 
-    # fluxo só pode passar em arcos ativos
+    # flow can only pass on active arcs
     @constraint(m, [i=1:T, j=1:T], f[i,j] <= cap * x[i,j])
 
-    # escolha automática de um nó inicial e final:
-    # in_degree = 0 → candidato a início
-    # out_degree = 0 → candidato a fim
+    # Automatic selection of a start and end node:
+    # in_degree = 0 → candidate for start
+    # out_degree = 0 → candidate for end
     possible_start = findall(t -> count(i -> tc_prereqs_matrix[i,t] == 1, 1:T) == 0, 1:T)
     possible_end   = findall(t -> count(j -> tc_prereqs_matrix[t,j] == 1, 1:T) == 0, 1:T)
 
     start = length(possible_start) == 1 ? possible_start[1] : nothing
     finish = length(possible_end) == 1 ? possible_end[1] : nothing
 
-    # balanço de fluxo
+    # Flow balance
     for v in 1:T
         if start !== nothing && v == start
             @constraint(m, sum(f[v,j] for j in 1:T) - sum(f[i,v] for i in 1:T) == 1)
@@ -155,11 +152,10 @@ function main()
             @constraint(m, sum(f[v,j] for j in 1:T) - sum(f[i,v] for i in 1:T) == 0)
         end
     end
+    
 
-
-    # ---- OBJETIVO ----
+    # Objective and execution
     @objective(m, Min, sum(distance_matrix[i,j] * x[i,j] for i in 1:T, j in 1:T))
-
     optimize!(m)
     @show objective_value(m)
 
