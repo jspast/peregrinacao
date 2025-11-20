@@ -503,7 +503,7 @@ solution grasp(
     prob_tmp.distances = new uint[prob.num_temples * prob.num_temples];
 
     candidate *candidates = new candidate[prob.num_temples];
-    bool *prereq_forward = new bool[prob.num_temples];
+    bool *prereq_forward = new bool[prob.num_temples] {0};
     uint *search_order = new uint[prob.num_temples - 1];
     std::iota(search_order, &search_order[prob.num_temples - 1], 0);
 
