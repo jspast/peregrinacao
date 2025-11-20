@@ -548,91 +548,75 @@ solution grasp(
     return best_sol;
 }
 
-void time_results(const problem& prob, double time, std::ofstream& csv)
-{
-    double alpha = 0.05;
-
-    // First run
-    long iterations = std::numeric_limits<long>::max();
-    std::mt19937 rng(1);
-    runtime_info info1;
-    info1.time_limit = time;
-
-    solution best_sol1 = grasp(prob, iterations, alpha, info1, rng);
-    delete[] best_sol1.route;
-
-    // Get the total of iterations from the first run
-    iterations = info1.total_iterations;
-    csv << std::format("{},{},{},{},{},{},{},{}\n", time, alpha, 1, info1.total_iterations,
-                        info1.grasp_iterations, get_elapsed_time(info1.timer), info1.initial_sol_value, best_sol1.value);
-
-    // Next alpha=0.05 runs
-    for (uint seed = 2; seed <= 5; ++seed) {
-        rng.seed(seed);
-        runtime_info info;
-        solution best_sol = grasp(prob, iterations, alpha, info, rng);
-        delete[] best_sol.route;
-        csv << std::format("{},{},{},{},{},{},{},{}\n", time, alpha, seed, info.total_iterations,
-                            info.grasp_iterations, get_elapsed_time(info.timer), info.initial_sol_value, best_sol.value);
-    }
-
-    // alpha=0.2 runs
-    alpha = 0.2;
-    for (uint seed = 1; seed <= 5; ++seed) {
-        rng.seed(seed);
-        runtime_info info;
-        solution best_sol = grasp(prob, iterations, alpha, info, rng);
-        delete[] best_sol.route;
-        csv << std::format("{},{},{},{},{},{},{},{}\n", time, alpha, seed, info.total_iterations,
-                            info.grasp_iterations, get_elapsed_time(info.timer), info.initial_sol_value, best_sol.value);
-    }
-}
-
-void generate_results(std::string_view& instances_dir, uint num_instances = 10)
-{
-    for (uint i = 1; i <= num_instances; ++i) {
-        std::string path = std::format("{}{:02}.txt", instances_dir, i);
-        std::ifstream input(path);
-        const problem prob = parse_input_file(input);
-        input.close();
-
-        path = std::format("{}{:02}.csv", instances_dir, i);
-        std::ofstream csv(path);
-        csv << "tempo_alvo,alpha,seed,iterações_parciais,iterações_grasp,tempo_execução,valor_inicial,valor\n";
-
-        time_results(prob, 5, csv);
-        csv.flush();
-        time_results(prob, 300, csv);
-
-        csv.close();
-        delete[] prob.temples;
-        delete[] prob.distances;
-    }
-}
-
+// Generate csv lines for preliminary results of a problem
 void time_pre_results(const problem& prob, long iterations, std::ofstream& csv)
 {
     double alphas[5] = {0.05, 0.1, 0.2, 0.3, 0.5};
 
-    std::mt19937 rng(1);
+    std::mt19937 rng;
+    runtime_info info;
+    solution sol;
 
     for (double alpha : alphas) {
         rng.seed(1);
-        runtime_info info;
-        solution best_sol = grasp(prob, iterations, alpha, info, rng);
-        delete[] best_sol.route;
 
-        csv << std::format("{},{},{},{},{},{},{},{}\n", 5, alpha, 1, info.total_iterations,
-                           info.grasp_iterations, get_elapsed_time(info.timer),
-                           info.initial_sol_value, best_sol.value);
+        info = runtime_info();
+
+        sol = grasp(prob, iterations, alpha, info, rng);
+        delete[] sol.route;
+
+        csv << std::format("{},{},{},{},{},{},{},{}\n",
+            5, alpha, 1, info.total_iterations, info.grasp_iterations,
+            get_elapsed_time(info.timer), info.initial_sol_value, sol.value);
         csv.flush();
     }
 }
 
-void generate_pre_results(std::string_view& instances_dir, uint num_instances = 10)
+// Generate csv lines for final results of a problem
+// Limits the first run by time
+// The others are limited by the number of iterations achieved on the first
+void time_results(const problem& prob, double time, std::ofstream& csv)
 {
-    long iterations[10] = {73491534, 89026157, 32982444, 10489985, 54104004,
-        75804993, 71246358, 88245156, 36808028, 50494627};
+    double alphas[2] = {0.05, 0.2};
+    uint seeds[5] = {1, 2, 3, 4, 5};
+
+    long iterations_limit = std::numeric_limits<long>::max();
+    std::mt19937 rng;
+    solution sol;
+    runtime_info info;
+    info.time_limit = time;
+
+    uint line = 0;
+    for (double alpha : alphas) {
+        for (uint seed : seeds) {
+            rng.seed(seed);
+
+            sol = grasp(prob, iterations_limit, alpha, info, rng);
+            delete[] sol.route;
+
+            if (line == 0)
+                iterations_limit = info.total_iterations;
+
+            csv << std::format("{},{},{},{},{},{},{},{}\n",
+                time, alpha, seed, info.total_iterations, info.grasp_iterations,
+                get_elapsed_time(info.timer), info.initial_sol_value, sol.value);
+            csv.flush();
+
+            info = runtime_info();
+            line++;
+        }
+    }
+}
+
+// Generate CSV files for each problem with its results
+// Problem files should be named "{:02}.txt" (Ex: "07.txt")
+void generate_results(std::string_view& instances_dir, bool pre = false, uint num_instances = 10)
+{
+    // Used for pre_results
+    long iterations[10] = {
+        73491534, 89026157, 32982444, 10489985, 54104004,
+        75804993, 71246358, 88245156, 36808028, 50494627
+    };
 
     for (uint i = 1; i <= num_instances; ++i) {
         std::string path = std::format("{}{:02}.txt", instances_dir, i);
@@ -644,7 +628,13 @@ void generate_pre_results(std::string_view& instances_dir, uint num_instances = 
         std::ofstream csv(path);
         csv << "tempo_alvo,alpha,seed,iterações_parciais,iterações_grasp,tempo_execução,valor_inicial,valor\n";
 
-        time_pre_results(prob, iterations[i - 1], csv);
+        if (pre) {
+            time_pre_results(prob, iterations[i - 1], csv);
+        }
+        else {
+            time_results(prob, 5, csv);
+            time_results(prob, 300, csv);
+        }
 
         csv.close();
         delete[] prob.temples;
@@ -655,9 +645,10 @@ void generate_pre_results(std::string_view& instances_dir, uint num_instances = 
 int main(int argc, char *argv[])
 {
     parameters params = parse_parameters(argc, argv);
-    print_parameters(params);
 
     if (!params.generate_results && !params.generate_pre_results) {
+        print_parameters(params);
+
         std::mt19937 rng(params.seed);
 
         std::ifstream input_file(params.input_path.data());
@@ -674,11 +665,7 @@ int main(int argc, char *argv[])
         delete[] prob.distances;
     }
     else {
-        if (params.generate_results)
-            generate_results(params.input_path);
-
-        if (params.generate_pre_results)
-            generate_pre_results(params.input_path);
+        generate_results(params.input_path, params.generate_pre_results);
     }
 
     return 0;
