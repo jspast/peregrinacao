@@ -523,8 +523,11 @@ solution grasp(
         if (!greedy_randomized(prob_tmp, sol, candidates, alpha, info, rng))
             break;
 
-        if (info.grasp_iterations == 0)
+        if (info.grasp_iterations == 0) {
             info.initial_sol_value = sol.value;
+            std::cout << "\nInitial solution:\n";
+            print_solution(sol, prob.num_temples);
+        }
 
         // Run local search
         iterations_left = local_search(sol, prob, prereq_forward, search_order,
