@@ -1,15 +1,19 @@
 using JuMP
 using HiGHS
-using Printf
 
+# ---------- HELPERS ----------
+# Euclidian distance between two points p1 and p2
 function euclidian_distance(p1::Tuple{Float64,Float64}, p2::Tuple{Float64,Float64})::Float64
     return sqrt((p1[1] - p2[1])^2 + (p1[2] - p2[2])^2)
 end
 
+# ---------- MAIN ----------
 function main()
+
+    # --- PARSING ENTRIES ---
     # Read command line arguments
     if length(ARGS) < 3
-        println("Usage: julia main.jl <input_filename> <max_time> <seed>")
+        println("Usage: julia main.jl <input_file> <max_time> <seed>")
         exit(1)
     end
 
@@ -22,7 +26,7 @@ function main()
     # Next T lines: two numbers per line (pair of coordinates)
     # Next line: integer P
     # Next P lines: two numbers per line (pair of pre-requisites)
-    # We assume the file is well-formed (minimal validation as requested)
+    # We assume the file is well-formed (minimal validation)
 
     # Read all lines
     lines = readlines(input_file)
@@ -41,29 +45,37 @@ function main()
 
     # Parse P and second block of pairs
     P = parse(Int, strip(lines[idx])); idx += 1
-    prerequisites = Vector{Tuple{Float64,Float64}}()
+    prerequisites = Vector{Tuple{Int,Int}}()
     for k in 1:P
         ln = strip(lines[idx]); idx += 1
         parts = split(ln)
-        a = parse(Float64, parts[1])
-        b = parse(Float64, parts[2])
+        a = parse(Int, parts[1])
+        b = parse(Int, parts[2])
         push!(prerequisites, (a, b))
     end
 
-    # Create distance matrix
-    distance_matrix = Array{Float64}(undef, T, T)
+    println("Instance loaded: T=$T, P=$(length(prerequisites)). \nBuilding matrices...")
+
+
+    # --- BUILDING FORMULATION ENTRIES ---
+    # Create distance matrix (extended for dummy node T+1)
+    distance_matrix = Array{Float64}(undef, T+1, T+1)
     for i in 1:T
         distance_matrix[i, i] = 0.0
         for j in (i+1):T
-            distance_matrix[i, j] = floor(100 * euclidian_distance(temples[i], temples[j]))
-            distance_matrix[j, i] = distance_matrix[i, j]
+            d = floor(100 * euclidian_distance(temples[i], temples[j]))
+            distance_matrix[i, j] = d
+            distance_matrix[j, i] = d
         end
+        distance_matrix[i, T+1] = 0.0
+        distance_matrix[T+1, i] = 0.0
     end
+    distance_matrix[T+1, T+1] = 0.0
 
     # Create transitive closure of prerequisites matrix
     prereqs_matrix = fill(0, T, T)
     for (a, b) in prerequisites
-        prereqs_matrix[Int(a), Int(b)] = 1
+        prereqs_matrix[a, b] = 1
     end
     tc_prereqs_matrix = copy(prereqs_matrix)
     for k in 1:T
@@ -86,79 +98,89 @@ function main()
         latest[t] = T - count(j -> tc_prereqs_matrix[t,j] == 1, 1:T)
     end
 
-    println("Pre processing done. Starting optimization...")
-
-
-    # Defining model
-    m = Model(HiGHS.Optimizer)
-    set_optimizer_attribute(m, "time_limit", max_time)
-    set_optimizer_attribute(m, "random_seed", seed)
-
-
-    # Decision variables
-    # x[i,j] = 1 if j is visisted immediately after i
-    @variable(m, x[1:T, 1:T], Bin)
-    @constraint(m, [i=1:T], x[i,i] == 0)
-
-    # Single commodity flow
-    @variable(m, f[1:T, 1:T] >= 0)
-
-    # Degree constraints
-    @constraint(m, [i=1:T], sum(x[i,j] for j in 1:T) <= 1)   # each node has <= 1 successor
-    @constraint(m, [j=1:T], sum(x[i,j] for i in 1:T) <= 1)   # each node has <= 1 predecessor
-    @constraint(m, sum(x) == T-1)
-
-    # Precedence: prohibit invalid arcs
-    for i in 1:T, j in 1:T
-        if tc_prereqs_matrix[j,i] == 1
-            @constraint(m, x[i,j] == 0)     # cannot go from i to j
+    # Detect cycle via inconsistent earliest/latest bounds
+    for t in 1:T
+        if earliest[t] > latest[t]
+            println("Error: prerequisites contain a cycle involving temple $t.")
+            println("earliest[$t] = $(earliest[t]), latest[$t] = $(latest[t])")
+            exit(1)
         end
     end
 
-    # Optimization 1: prohibit arcs that violate earliest/latest
-    for i in 1:T, j in 1:T
-        if earliest[j] > latest[i] + 1
-            @constraint(m, x[i,j] == 0)
-        end
-        if earliest[i] >= latest[j]
-            @constraint(m, x[i,j] == 0)
-        end
-    end
-
-    # Optimization 2: limit capacity of the flow
-
-    # Capacity based on windows, not on T
-    cap = maximum(latest[i] - earliest[i] for i in 1:T)
-
-    # flow can only pass on active arcs
-    @constraint(m, [i=1:T, j=1:T], f[i,j] <= cap * x[i,j])
-
-    # Automatic selection of a start and end node:
-    # in_degree = 0 → candidate for start
-    # out_degree = 0 → candidate for end
-    possible_start = findall(t -> count(i -> tc_prereqs_matrix[i,t] == 1, 1:T) == 0, 1:T)
-    possible_end   = findall(t -> count(j -> tc_prereqs_matrix[t,j] == 1, 1:T) == 0, 1:T)
-
-    start = length(possible_start) == 1 ? possible_start[1] : nothing
-    finish = length(possible_end) == 1 ? possible_end[1] : nothing
-
-    # Flow balance
-    for v in 1:T
-        if start !== nothing && v == start
-            @constraint(m, sum(f[v,j] for j in 1:T) - sum(f[i,v] for i in 1:T) == 1)
-        elseif finish !== nothing && v == finish
-            @constraint(m, sum(f[v,j] for j in 1:T) - sum(f[i,v] for i in 1:T) == -1)
-        else
-            @constraint(m, sum(f[v,j] for j in 1:T) - sum(f[i,v] for i in 1:T) == 0)
-        end
-    end
+    println("Starting model...")
     
 
+    # --- MODEL DEFINITION ---
+    # Defining model
+    m = Model(HiGHS.Optimizer)
+    set_time_limit_sec(m, max_time)
+    set_optimizer_attribute(m, "random_seed", seed)
+
+    # Variables
+    # x[i,j] includes dummy node; x[i,j] == 1 if we go from i to j (directed arc)
+    @variable(m, x[1:T+1, 1:T+1], Bin)
+    # u[i] is MTZ position variable (integer domain tightened by earliest/latest)
+    # We don't need to include dummy node in u
+    @variable(m, earliest[i] <= u[i=1:T] <= latest[i], Int)
+
+    # Constraints
+    # Each node has exactly one outgoing and exactly one incoming arc
+    for i in 1:T+1
+        @constraint(m, sum(x[i, j] for j in 1:T+1 if i != j) == 1)
+        @constraint(m, sum(x[j, i] for j in 1:T+1 if i != j) == 1)
+        @constraint(m, x[i, i] == 0) # no self-loops
+    end
+
+    # MTZ subtour elimination (big-M style)
+    # For every possible arc (i != j), if x[i,j] == 1 then u[j] >= u[i] + 1
+    # Ee implement: u[j] >= u[i] + 1 - M*(1 - x[i,j]), with M = T (safe big-M)
+    for i in 1:T
+        for j in 1:T
+            if i != j
+                @constraint(m, u[j] >= u[i] + 1 - T * (1 - x[i, j]))
+
+                # OPTIMIZATION 1: 
+                # if earliest[i] >= latest[j], then arc i->j is impossible
+                if earliest[i] >= latest[j]
+                    @constraint(m, x[i,j] == 0)
+                end
+            end
+        end
+    end
+
+    # Precedence order
+    for i in 1:T
+        for j in 1:T
+            # For each prerequisite i -> j
+            if prereqs_matrix[i, j] == 1
+                @constraint(m, u[i] + 1 <= u[j]) # Enforce order through MTZ variables
+                @constraint(m, x[j,i] == 0) # Forbid direct arc from i to j
+            end
+
+            # OPTIMIZATION 2:
+            # For each transitive prerequisite i -> j
+            if tc_prereqs_matrix[i, j] == 1
+                @constraint(m, x[j,i] == 0) # Forbid arc from j to i
+            end
+        end
+    end
+
+    # Restrictions for dummy node arcs
+    # If k has prerequisites, it CANNOT be the first; thus x[T+1, k] = 0
+    # If k is a prerequisite for someone, it CANNOT be the last; thus x[k, T+1] = 0
+    for k in 1:T
+        if earliest[k] > 1
+            @constraint(m, x[T+1, k] == 0)
+        end
+        if latest[k] < T
+            @constraint(m, x[k, T+1] == 0)
+        end
+    end
+
     # Objective and execution
-    @objective(m, Min, sum(distance_matrix[i,j] * x[i,j] for i in 1:T, j in 1:T))
+    @objective(m, Min, sum(distance_matrix[i,j] * x[i,j] for i in 1:T+1, j in 1:T+1))
     optimize!(m)
     @show objective_value(m)
-
 
 end
 
