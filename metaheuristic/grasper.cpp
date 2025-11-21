@@ -151,7 +151,10 @@ inline uint temples_distance(const position a, const position b)
     return std::sqrt(dx * dx + dy * dy) * 100;
 }
 
-inline void compute_distance_matrix(problem& prob)
+// Fills the prob.distances matrix
+// prob.distances[i * prob.num_temples + j] will have the distance between temple i an j
+// prob.distances[j * prob.num_temples + i] will also have that distance
+void compute_distance_matrix(problem& prob)
 {
     for (uint i = 0; i < prob.num_temples; ++i) {
         for (uint j = i + 1; j < prob.num_temples; ++j) {
@@ -255,7 +258,7 @@ inline double get_elapsed_time(const std::chrono::time_point<default_clock>& tim
         (default_clock::now() - timer).count();
 }
 
-inline void print_time(const std::chrono::time_point<default_clock>& timer)
+void print_time(const std::chrono::time_point<default_clock>& timer)
 {
     std::cout << std::fixed << std::setprecision(2)
               << "Elapsed time: " << get_elapsed_time(timer) << " seconds\n";
@@ -278,7 +281,8 @@ inline bool check_time_limit(runtime_info info)
 
 // Builds a greedy randomized solution for the problem
 // A copy of the problem should be used as it is modified internally
-// Returns whether a complete solution was able to be constructed
+// Will build an incomplete solution if info.time_limit is reached
+// Returns whether the solution is complete
 bool greedy_randomized(
     problem& prob,
     solution& sol,
@@ -388,7 +392,8 @@ inline uint compute_new_sol_value(
     return new_value;
 }
 
-// Improves the current solution until a local minimum or max_iterations is reached
+// Improves the current solution until a local minimum or a limit is reached
+// Limits can be max_iterations or info.time_limit
 // Uses a 2-opt neighbourhood
 // Returns the number of iterations left
 long local_search(
@@ -470,7 +475,9 @@ void print_solution(const solution& sol, uint route_size)
     std::cout << sol.route[route_size - 1] + 1 << '\n';
 }
 
-void update_best_solution(
+// Saves sol to best_sol only if it has a better value
+// If so, will also print information about the solution found
+inline void update_best_solution(
     const solution& sol,
     solution& best_sol,
     uint sol_size,
@@ -484,6 +491,11 @@ void update_best_solution(
     }
 }
 
+// An implementation of Greedy Randomized Adaptive Search Procedure
+// Uses alpha to limit the size of the RCL
+// Runs until iterations_limit or info.time_limit is reached
+// Returns the best solution found
+// Other informations are saved in info
 solution grasp(
     const problem& prob,
     long iterations_limit,
